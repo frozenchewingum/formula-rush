@@ -1,0 +1,575 @@
+// Formula Rush game engine: a direct port of the v1 prototype's Component class.
+// Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
+import {
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, PACE, clamp, fmt, buzz,
+  type Settings, type Controls, DEFAULT_SETTINGS,
+} from './constants';
+import { buildTrack, trackAt, type Track } from './track';
+import { drawWorld } from './render';
+
+export type Screen = 'garage' | 'join' | 'lobby' | 'lights' | 'race' | 'results';
+export type Phase = 'hold' | 'red' | 'green';
+
+export type Car = {
+  name: string | null; userId: string | null; team: string; color: string; dark: string;
+  isPlayer: boolean; remote: boolean; ai: boolean;
+  p: number; d: number; dTarget: number; v: number; k: number; i: number;
+  base: number; startDelay: number; think: number; yawOff: number; contactT: number;
+  finished: boolean; finishTime: number; boostOn: boolean; drsOn: boolean; dnf: boolean;
+  snaps: Snap[];
+};
+type Snap = { t: number; p: number; d: number; v: number; y: number };
+
+export type Hud = {
+  pos: number; lap: number; laps: number; time: string; best: string; boost: number; tyre: number;
+  kmh: number; drsReady: boolean; drsOn: boolean; slip: boolean; rain: boolean; field: number;
+};
+export type ResultRow = { pos: number; name: string; color: string; gap: string; you: boolean };
+export type Summary = { pos: number; gained: string; time: string; best: string; apex: string; contacts: string };
+export type Toast = { text: string; color: string; id: number };
+
+export type UiState = {
+  phase: Phase; lights: number; holding: boolean; reaction: string;
+  toast: Toast | null; hud: Hud; results: ResultRow[]; summary: Summary | null; showResults: boolean; showRace: boolean;
+};
+
+export type GridEntry = { team: number; userId?: string | null; name?: string | null; base: number };
+export type MpStart = {
+  grid: GridEntry[]; laps: number; rainPlan: [number, number][];
+  greenAt: number; lightsDelay: number; hostId: string;
+};
+export type FinishInfo = {
+  pos: number; totalTime: number; bestLap: number | null; apexes: string; contacts: number;
+};
+
+export type StateMsg = {
+  id: string; t: number; p: number; d: number; v: number; y: number; b: boolean; r: boolean;
+  ai?: [number, number, number, number, number][]; aiFin?: [number, number][];
+};
+export type FinishMsg = { id: string; finishTime: number; best: number | null };
+
+export interface NetLink {
+  myId: string;
+  isHost(): boolean;
+  serverNow(): number;
+  sendState(m: StateMsg): void;
+  sendFinish(m: FinishMsg): void;
+}
+
+type Game = {
+  cars: Car[]; player: Car; t: number; laps: number; running: boolean;
+  boost: number; boostT: number; tyre: number; drsOn: boolean; drsReady: boolean; slip: boolean;
+  lapStart: number; best: number; apexHits: number; apexTotal: number; contacts: number;
+  skill: number; camH: number; fov: number; shake: number; jump: boolean; rainWas: boolean;
+  rainPlan: [number, number][]; startSlot: number; finishedAt: number;
+};
+
+const emptyHud = (laps: number): Hud => ({ pos: 7, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, slip: false, rain: false, field: 10 });
+
+export class Engine {
+  T: Track = buildTrack();
+  g!: Game;
+  settings: Settings = { ...DEFAULT_SETTINGS };
+  controls: Controls = 'swipe';
+  team = 0;
+  screen: Screen = 'garage';
+  ui: UiState;
+  net: NetLink | null = null;
+  mp: MpStart | null = null;
+  onScreen: (s: Screen) => void = () => {};
+  onFinish: (f: FinishInfo) => void = () => {};
+
+  keySteer = 0; dragSteer = 0; gyroSteer = 0;
+  private listeners = new Set<() => void>();
+  private timers: number[] = [];
+  private holdingFlag = false;
+  private toastTimer = 0;
+  private toastSeq = 0;
+  private sendT = 0;
+  private lightsStarted = false;
+  private canvas: HTMLCanvasElement | null = null;
+  private raf = 0;
+  private last = 0;
+  private hudT = 0;
+  drawCache: { S?: (number[] | null)[][]; V?: boolean[] } = {};
+
+  constructor() {
+    this.ui = { phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, hud: emptyHud(3), results: [], summary: null, showResults: false, showRace: false };
+    this.resetRace();
+  }
+
+  // ---------- store ----------
+  subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
+  getUi = () => this.ui;
+  private set(patch: Partial<UiState>) { this.ui = { ...this.ui, ...patch }; this.listeners.forEach(f => f()); }
+  private later(fn: () => void, ms: number) { this.timers.push(window.setTimeout(fn, ms)); }
+  clearTimers() { this.timers.forEach(clearTimeout); this.timers = []; }
+  setScreen(s: Screen) { this.screen = s; this.onScreen(s); }
+
+  // ---------- loop ----------
+  attach(cv: HTMLCanvasElement) {
+    this.canvas = cv;
+    this.last = performance.now();
+    const loop = (t: number) => { this.tick(t); this.raf = requestAnimationFrame(loop); };
+    this.raf = requestAnimationFrame(loop);
+  }
+  detach() { cancelAnimationFrame(this.raf); this.canvas = null; this.clearTimers(); }
+
+  private tick(now: number) {
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+    if (this.mp && this.net && (this.g.running || this.screen === 'lights')) this.mpLights();
+    if (this.g.running) this.step(dt);
+    if (this.canvas) drawWorld(this, this.canvas, dt);
+    if (now - this.hudT > 100) { this.hudT = now; this.pushHud(); }
+  }
+
+  // ---------- race setup ----------
+  resetRace(mp: MpStart | null = null) {
+    this.clearTimers();
+    this.mp = mp;
+    const T = this.T;
+    const laps = mp ? mp.laps : this.settings.laps;
+    const pace = PACE[this.settings.aiPace] || 0.955;
+    let grid: GridEntry[];
+    if (mp) grid = mp.grid;
+    else {
+      const ti = this.team, pool: number[] = [];
+      for (let t = 0; t < 5; t++) for (let j = 0; j < 2; j++) pool.push(t);
+      pool.splice(pool.indexOf(ti), 1);
+      shuffle(pool);
+      const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
+      grid = teams.map((t, i) => ({ team: t, userId: i === GRID_SLOT ? 'me' : null, base: i === GRID_SLOT ? VMAX : aiBase(i, pace) }));
+    }
+    const myId = mp && this.net ? this.net.myId : 'me';
+    const host = !mp || !this.net || this.net.isHost();
+    const cars: Car[] = grid.map((e, i) => {
+      const me = e.userId === myId, human = !!e.userId, d = (i % 2 ? 1 : -1) * LANE, tm = TEAMS[e.team];
+      return {
+        name: human && !me ? (e.name || 'DRIVER') : null, userId: e.userId || null,
+        team: tm.name, color: tm.color, dark: tm.dark,
+        isPlayer: me, remote: !me && (human || !host), ai: !human,
+        p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
+        base: me ? VMAX : e.base, startDelay: me ? Infinity : 0.15 + Math.random() * 0.3,
+        think: Math.random() * 2, yawOff: 0, contactT: 0, finished: false, finishTime: 0,
+        boostOn: false, drsOn: false, dnf: false, snaps: [],
+      };
+    });
+    const player = cars.find(c => c.isPlayer) || cars[GRID_SLOT];
+    player.isPlayer = true;
+    const rainPlan = mp ? mp.rainPlan : makeRainPlan(this.settings.weather, laps, T.L);
+    this.g = {
+      cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, tyre: 1, drsOn: false, drsReady: false, slip: false,
+      lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
+      skill: pace > 0.98 ? 0.85 : pace > 0.93 ? 0.6 : 0.35, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
+      jump: false, rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
+    };
+    T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
+    this.keySteer = 0; this.dragSteer = 0;
+    this.lightsStarted = false;
+    this.set({ hud: emptyHud(laps) });
+  }
+
+  startRace(mp: MpStart | null = null) {
+    this.resetRace(mp);
+    this.holdingFlag = false;
+    this.set({ phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, showResults: false, showRace: false, results: [], summary: null });
+    this.setScreen('lights');
+  }
+
+  /** Lights driven by the shared clock so every client turns green together. */
+  private mpLights() {
+    const mp = this.mp!, now = this.net!.serverNow(), g = this.g;
+    if (g.running) {
+      g.t = (now - mp.greenAt) / 1000;
+      return;
+    }
+    const greenAt = mp.greenAt, firstOn = greenAt - mp.lightsDelay - 4 * 700;
+    if (now >= greenAt) {
+      g.running = true; g.t = (now - greenAt) / 1000;
+      this.set({ lights: 0, phase: 'green' }); buzz(40);
+      this.afterGreen();
+      return;
+    }
+    if (now >= firstOn) {
+      const n = Math.min(5, 1 + Math.floor((now - firstOn) / 700));
+      if (n !== this.ui.lights) { this.set({ lights: n, phase: 'red' }); buzz(10); }
+    }
+  }
+
+  private runLights() {
+    let n = 0;
+    const stepL = () => {
+      n++; this.set({ lights: n }); buzz(10);
+      if (n < 5) return this.later(stepL, 700);
+      this.later(() => {
+        const g = this.g; g.running = true; g.t = 0;
+        this.set({ lights: 0, phase: 'green' }); buzz(40);
+        this.afterGreen();
+      }, 700 + Math.random() * 1600);
+    };
+    this.later(stepL, 600);
+  }
+
+  private afterGreen() {
+    const g = this.g;
+    if (g.jump) this.later(() => this.setScreen('race'), 1000);
+    else this.later(() => { if (g.player.startDelay === Infinity) this.launch(true); }, 1500);
+  }
+
+  throttleDown() {
+    if (this.screen !== 'lights' || this.holdingFlag) return;
+    this.holdingFlag = true; this.set({ holding: true });
+    if (!this.mp && this.ui.phase === 'hold' && !this.lightsStarted) {
+      this.lightsStarted = true; this.set({ phase: 'red' }); this.runLights();
+    }
+  }
+
+  throttleUp() {
+    if (this.screen !== 'lights' || !this.holdingFlag) return;
+    this.holdingFlag = false; this.set({ holding: false });
+    const g = this.g;
+    if (this.ui.phase === 'red' && !g.jump) {
+      g.jump = true; g.player.startDelay = 1.0;
+      this.set({ reaction: 'JUMP START +1.0s' }); buzz([80, 40, 80]);
+    } else if (this.ui.phase === 'green') this.launch(false);
+  }
+
+  private launch(late: boolean) {
+    const g = this.g;
+    if (g.jump || g.player.startDelay !== Infinity) return;
+    g.player.startDelay = late ? 1.5 : g.t;
+    if (!late && g.t < 0.2) g.player.v = 12;
+    this.set({ reaction: late ? '1.500s · LATE' : g.t.toFixed(3) + 's' });
+    this.later(() => this.setScreen('race'), 900);
+  }
+
+  isRain() {
+    const g = this.g;
+    return g.rainPlan.some(([a, b]) => g.player.p >= a && g.player.p < b);
+  }
+
+  toast(text: string, color: string) {
+    this.set({ toast: { text, color, id: ++this.toastSeq } });
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => this.set({ toast: null }), 1000);
+  }
+
+  // ---------- controls ----------
+  lane(dir: number) {
+    const pl = this.g.player;
+    if (pl.finished) return;
+    const idx = clamp(Math.round(pl.dTarget / LANE) + dir, -1, 1);
+    pl.dTarget = idx * LANE;
+  }
+
+  action() {
+    const g = this.g;
+    if (g.player.finished || g.t < g.player.startDelay) return;
+    if (g.drsReady) { g.drsOn = true; g.drsReady = false; this.toast('DRS OPEN', '#00D2BE'); buzz(20); }
+    else if (g.boost >= 35) { g.boost -= 35; g.boostT = 1.6; this.toast('BOOST', '#FFD400'); buzz(30); }
+    else this.toast('HIT APEXES FOR BOOST', '#8A8A92');
+  }
+
+  // ---------- helpers ----------
+  private carAhead(c: Car, range: number, lat: number) {
+    let best: Car | null = null, bg = range;
+    for (const o of this.g.cars) {
+      if (o === c) continue;
+      const gap = o.p - c.p;
+      if (gap > 0 && gap < bg && Math.abs(o.d - c.d) < lat) { bg = gap; best = o; }
+    }
+    return best ? { car: best, gap: bg } : null;
+  }
+  private laneFree(c: Car, d: number) {
+    for (const o of this.g.cars) {
+      if (o === c) continue;
+      if (Math.abs(o.p - c.p) < 10 && (Math.abs(o.d - d) < 2.4 || Math.abs(o.dTarget - d) < 2.4)) return false;
+    }
+    return true;
+  }
+  private nextApex(p: number) {
+    const T = this.T;
+    let s = p % T.L;
+    if (s < 0) s += T.L;
+    let best = null, bd = 220;
+    for (const a of T.apexes) { let dd = a.s - s; if (dd < 0) dd += T.L; if (dd < bd) { bd = dd; best = a; } }
+    return best;
+  }
+
+  // ---------- simulation ----------
+  private step(dt: number) {
+    const g = this.g, T = this.T, pl = g.player, rain = this.isRain(), L = LANE;
+    if (!this.mp) g.t += dt;
+    if (rain && !g.rainWas && g.t > 2) this.toast('RAIN · GRIP LOW', '#3B6CFF');
+    if (!rain && g.rainWas && g.t > 2) this.toast('TRACK DRYING', '#F2F2F2');
+    g.rainWas = rain;
+    for (const c of g.cars) { const a = trackAt(T, c.p); c.k = a.k; c.i = a.i; }
+    if (this.controls === 'tilt' && !pl.finished) {
+      const steer = this.keySteer || this.dragSteer || this.gyroSteer || 0;
+      pl.dTarget = clamp(pl.d + steer * 7, -HALF + 0.6, HALF - 0.6);
+    }
+    for (const c of g.cars) {
+      if (c.remote) { this.stepRemote(c, dt); continue; }
+      const started = g.t >= c.startDelay;
+      let G = 66 * (rain ? 0.72 : 1);
+      let vmax = c.base, mult = 1;
+      if (c.isPlayer) {
+        G *= 0.8 + 0.2 * g.tyre; vmax *= 0.93 + 0.07 * g.tyre;
+        if (g.boostT > 0) mult *= 1.25;
+        if (g.drsOn) mult *= 1.12;
+        if (g.slip) mult *= 1.06;
+        if (c.contactT > 0.5) mult *= 0.7;
+      }
+      let target = started ? Math.min(vmax, Math.sqrt(G / Math.max(T.ka[c.i], 1e-4))) * mult : 0;
+      if (c.finished) target = Math.min(target, 38);
+      if (!c.isPlayer) {
+        const ah = this.carAhead(c, 16, 2.3);
+        if (ah) {
+          let moved = false;
+          if (ah.car.v < c.v + 2) {
+            const li = Math.round(c.dTarget / L);
+            for (const dl of (Math.random() < 0.5 ? [1, -1] : [-1, 1])) {
+              const nl = li + dl;
+              if (nl >= -1 && nl <= 1 && this.laneFree(c, nl * L)) { c.dTarget = nl * L; moved = true; break; }
+            }
+          }
+          if (!moved || ah.gap < 6) target = Math.min(target, ah.car.v * (ah.gap < 6 ? 0.95 : 1));
+        }
+        c.think -= dt;
+        if (c.think <= 0) {
+          c.think = 1.5 + Math.random() * 3;
+          const ap = this.nextApex(c.p);
+          const want = ap && Math.random() < g.skill ? ap.d : (Math.random() < 0.35 ? (Math.floor(Math.random() * 3) - 1) * L : c.dTarget);
+          if (this.laneFree(c, want)) c.dTarget = want;
+        }
+      }
+      c.v += clamp(target - c.v, -75 * dt, (c.isPlayer ? 26 : 24) * dt);
+      const prevD = c.d;
+      const lr = c.isPlayer ? 16 * (0.75 + 0.25 * g.tyre) * (rain ? 0.7 : 1) : 9;
+      c.d += clamp(c.dTarget - c.d, -lr * dt, lr * dt);
+      if (c.isPlayer && rain) c.d += Math.sin(g.t * 1.7) * 0.9 * dt;
+      const prevP = c.p;
+      c.p += c.v * dt / clamp(1 - c.k * c.d, 0.6, 1.4);
+      c.yawOff += (clamp((c.d - prevD) / dt / Math.max(c.v, 8), -0.45, 0.45) - c.yawOff) * Math.min(1, dt * 10);
+      if (c.contactT > 0) c.contactT -= dt;
+      let justFinished = false;
+      if (!c.finished && c.p >= g.laps * T.L) {
+        c.finished = true; justFinished = c.isPlayer;
+        c.finishTime = g.t - (c.p - g.laps * T.L) / Math.max(c.v, 1);
+      }
+      if (c.isPlayer) this.playerEvents(prevP, dt, justFinished);
+      if (justFinished) this.finish();
+    }
+    if (g.shake > 0) g.shake -= dt;
+    if (this.mp && this.net) this.broadcast();
+  }
+
+  private stepRemote(c: Car, dt: number) {
+    const s = c.snaps;
+    if (!s.length) return;
+    const rt = this.g.t - 0.1;
+    let a = s[0], b: Snap | null = null;
+    for (let n = 0; n < s.length; n++) { if (s[n].t <= rt) a = s[n]; else { b = s[n]; break; } }
+    const prevD = c.d;
+    if (b && b.t > a.t && a.t <= rt) {
+      const r = (rt - a.t) / (b.t - a.t);
+      c.p = a.p + (b.p - a.p) * r; c.d = a.d + (b.d - a.d) * r; c.v = a.v + (b.v - a.v) * r; c.yawOff = a.y + (b.y - a.y) * r;
+    } else {
+      const last = s[s.length - 1], ex = clamp(rt - last.t, 0, 0.5);
+      c.p = last.p + last.v * ex; c.d = last.d; c.v = last.v; c.yawOff = last.y;
+    }
+    c.dTarget = c.d;
+    if (dt > 0 && prevD === c.d) c.yawOff *= 0.9;
+    while (s.length > 2 && s[1].t < rt - 0.5) s.shift();
+  }
+
+  private broadcast() {
+    const g = this.g, net = this.net!, pl = g.player;
+    if (g.t - this.sendT < 0.1) return;
+    this.sendT = g.t;
+    const m: StateMsg = { id: net.myId, t: g.t, p: pl.p, d: pl.d, v: pl.v, y: pl.yawOff, b: g.boostT > 0, r: g.drsOn };
+    if (net.isHost()) {
+      m.ai = []; m.aiFin = [];
+      g.cars.forEach((c, i) => {
+        if (!c.ai) return;
+        m.ai!.push([i, r2(c.p), r2(c.d), r2(c.v), r2(c.yawOff)]);
+        if (c.finished) m.aiFin!.push([i, c.finishTime]);
+      });
+    }
+    net.sendState(m);
+  }
+
+  // ---------- network input ----------
+  onRemoteState(m: StateMsg) {
+    if (!this.mp || !this.g) return;
+    const g = this.g;
+    const c = g.cars.find(x => x.userId === m.id);
+    if (c && c.remote) { c.snaps.push({ t: m.t, p: m.p, d: m.d, v: m.v, y: m.y }); c.boostOn = m.b; c.drsOn = m.r; }
+    if (m.ai && !(this.net && this.net.isHost())) {
+      for (const [i, p, d, v, y] of m.ai) { const a = g.cars[i]; if (a && a.ai) { a.remote = true; a.snaps.push({ t: m.t, p, d, v, y }); } }
+      for (const [i, ft] of m.aiFin || []) { const a = g.cars[i]; if (a && !a.finished) { a.finished = true; a.finishTime = ft; this.refreshResults(); } }
+    }
+  }
+  onRemoteFinish(m: FinishMsg) {
+    if (!this.mp || !this.g) return;
+    const c = this.g.cars.find(x => x.userId === m.id);
+    if (c && !c.finished) { c.finished = true; c.finishTime = m.finishTime; this.refreshResults(); }
+  }
+  /** Host left: the new host takes over AI cars from their last known state. */
+  becomeHost() {
+    if (!this.g) return;
+    for (const c of this.g.cars) {
+      if (!c.ai || !c.remote) continue;
+      c.remote = false; c.dTarget = Math.round(c.d / LANE) * LANE; c.startDelay = 0; c.snaps = [];
+    }
+  }
+  /** A remote human vanished mid-race: freeze them as a slow AI so the grid stays sane. */
+  dropPlayer(userId: string) {
+    const c = this.g?.cars.find(x => x.userId === userId);
+    if (c && !c.finished) { c.snaps = []; c.v = 0; c.p = -1e6; c.dnf = true; this.refreshResults(); }
+  }
+
+  private playerEvents(prevP: number, dt: number, justFinished = false) {
+    const g = this.g, T = this.T, pl = g.player;
+    if (pl.p > 0 && Math.floor(prevP / T.L) < Math.floor(pl.p / T.L)) {
+      const lapN = Math.floor(pl.p / T.L);
+      if (lapN === 0) g.lapStart = g.t;
+      else if (!pl.finished || justFinished) {
+        // the line is crossed part-way through the frame; use the interpolated crossing time
+        const cross = justFinished ? pl.finishTime : g.t;
+        const lt = cross - g.lapStart;
+        g.lapStart = cross;
+        if (!g.best || lt < g.best) { g.best = lt; if (!justFinished) this.toast('FASTEST LAP', '#A855F7'); }
+        else if (lapN === g.laps - 1) this.toast('FINAL LAP', '#FFD400');
+      }
+    }
+    if (pl.finished) return;
+    for (const a of T.apexes) {
+      if (pl.p > 0 && Math.floor((prevP - a.s) / T.L) !== Math.floor((pl.p - a.s) / T.L)) {
+        g.apexTotal++;
+        if (Math.abs(pl.d - a.d) < 2.6) { g.boost = Math.min(100, g.boost + 30); a.hit = g.t; g.apexHits++; this.toast('APEX +BOOST', '#FFD400'); buzz(15); }
+        else a.miss = g.t;
+      }
+    }
+    const inZone = T.drs[pl.i];
+    const ah = this.carAhead(pl, 400, 99);
+    const gapT = ah ? ah.gap / Math.max(pl.v, 1) : 9;
+    if (g.drsOn && !inZone) g.drsOn = false;
+    g.drsReady = inZone && !g.drsOn && gapT < 1.0 && pl.p > 0;
+    const sl = this.carAhead(pl, 30, 1.6);
+    g.slip = !!(sl && sl.gap > 6);
+    if (g.boostT > 0) g.boostT -= dt;
+    g.tyre = Math.max(0.3, g.tyre - dt * 0.0042);
+    for (const o of g.cars) {
+      if (o === pl || pl.contactT > 0) continue;
+      const dp = o.p - pl.p, dd = Math.abs(o.d - pl.d);
+      if (Math.abs(dp) < 4.8 && dd < 2.05) {
+        if (dp > 1.5) pl.v = Math.min(pl.v, o.v * 0.72);
+        else {
+          pl.v *= 0.88;
+          if (!o.remote) o.v *= 0.9;
+          const away = pl.d < o.d ? -1 : 1;
+          pl.dTarget = clamp(Math.round(pl.d / LANE) + away, -1, 1) * LANE;
+        }
+        pl.contactT = 1.0; g.contacts++; g.shake = 0.35;
+        this.toast('CONTACT −0.8s', '#E10600'); buzz([60, 30, 60]);
+      }
+    }
+    if (Math.abs(pl.d) > HALF - 0.9 && pl.contactT <= 0) {
+      pl.v *= 0.8; pl.contactT = 0.8; g.contacts++; g.shake = 0.3; pl.dTarget = Math.sign(pl.d) * (HALF - 2);
+      this.toast('WALL', '#E10600'); buzz([60, 30, 60]);
+    }
+  }
+
+  private computeResults() {
+    const g = this.g, total = g.laps * this.T.L;
+    const rows = g.cars.map(c => ({ c, time: c.dnf ? Infinity : c.finished ? c.finishTime : g.t + (total - c.p) / Math.max(c.v, 45) })).sort((a, b) => a.time - b.time);
+    const lead = rows[0].time;
+    const results: ResultRow[] = rows.map((r, i) => ({
+      pos: i + 1,
+      name: r.c.isPlayer ? 'YOU · ' + r.c.team : r.c.name ? r.c.name + ' · ' + r.c.team : r.c.team + ' (AI)',
+      color: r.c.color,
+      gap: r.c.dnf ? 'DNF' : i === 0 ? fmt(r.time) : '+' + (r.time - lead).toFixed(3),
+      you: r.c.isPlayer,
+    }));
+    const pos = rows.findIndex(r => r.c.isPlayer) + 1;
+    return { results, pos };
+  }
+
+  private refreshResults() {
+    if (!this.g.player.finished) return;
+    const { results, pos } = this.computeResults();
+    const gained = (this.g.startSlot + 1) - pos;
+    const summary = this.ui.summary ? { ...this.ui.summary, pos, gained: gainedLabel(gained, pos) } : null;
+    this.set({ results, summary });
+  }
+
+  private finish() {
+    const g = this.g, pl = g.player;
+    g.boostT = 0; g.drsOn = false; g.drsReady = false;
+    const { results, pos } = this.computeResults();
+    const gained = (g.startSlot + 1) - pos;
+    const summary: Summary = {
+      pos, gained: gainedLabel(gained, pos), time: fmt(pl.finishTime), best: g.best ? fmt(g.best) : '—',
+      apex: g.apexHits + '/' + g.apexTotal, contacts: String(g.contacts),
+    };
+    this.toast('CHEQUERED FLAG', '#F2F2F2');
+    if (this.mp && this.net) this.net.sendFinish({ id: this.net.myId, finishTime: pl.finishTime, best: g.best || null });
+    this.onFinish({ pos, totalTime: pl.finishTime, bestLap: g.best || null, apexes: summary.apex, contacts: g.contacts });
+    this.later(() => { this.set({ results, summary }); this.refreshResults(); this.setScreen('results'); }, 1600);
+  }
+
+  private pushHud() {
+    const g = this.g, T = this.T, pl = g.player;
+    if (!g) return;
+    const pos = [...g.cars].sort((a, b) => b.p - a.p).indexOf(pl) + 1;
+    const lap = Math.min(g.laps, Math.max(1, Math.floor(pl.p / T.L) + 1));
+    this.set({
+      hud: {
+        pos, lap, laps: g.laps, time: fmt(pl.p > 0 && !pl.finished ? g.t - g.lapStart : 0), best: g.best ? fmt(g.best) : '—',
+        boost: Math.round(g.boost), tyre: Math.round(g.tyre * 100), kmh: Math.round(pl.v * 4.1),
+        drsReady: g.drsReady, drsOn: g.drsOn, slip: g.slip && !g.drsOn, rain: this.isRain(), field: g.cars.length,
+      },
+    });
+  }
+}
+
+function r2(n: number) { return Math.round(n * 100) / 100; }
+function gainedLabel(gained: number, pos: number) {
+  return gained > 0 ? '+' + gained + ' PLACES' : gained < 0 ? gained + ' PLACES' : 'HELD P' + pos;
+}
+export function shuffle<T>(a: T[]) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+export function aiBase(i: number, pace: number) {
+  return VMAX * pace * (1.01 - i * 0.005 + (Math.random() - 0.5) * 0.02);
+}
+
+/** Weather plan in track-progress units: list of [fromP, toP) ranges where it rains. */
+export function makeRainPlan(weather: Settings['weather'], laps: number, trackL: number): [number, number][] {
+  const L = laps * trackL;
+  if (weather === 'Dry') return [];
+  if (weather === 'Rain') return [[-1e9, 1e9]];
+  if (weather === 'Rain on final lap') return [[(laps - 1) * trackL, 1e9]];
+  const r = Math.random();
+  if (r < 0.4) return [];
+  if (r < 0.65) return [[-1e9, L * (0.3 + Math.random() * 0.4)]];
+  const s = L * (0.15 + Math.random() * 0.6);
+  return [[s, Math.random() < 0.5 ? 1e9 : s + L * (0.2 + Math.random() * 0.3)]];
+}
+
+/** Host builds the shared grid: humans random among slots 4..7 (P5–P8), AI elsewhere. */
+export function buildMpGrid(players: { userId: string; name: string; team: number }[], aiPace: Settings['aiPace']): GridEntry[] {
+  const pace = PACE[aiPace] || 0.955;
+  const pool: number[] = [];
+  for (let t = 0; t < 5; t++) for (let j = 0; j < 2; j++) pool.push(t);
+  for (const p of players) { const k = pool.indexOf(p.team); if (k >= 0) pool.splice(k, 1); }
+  shuffle(pool);
+  const slots = shuffle([4, 5, 6, 7]);
+  const grid: (GridEntry | null)[] = new Array(10).fill(null);
+  players.slice(0, 4).forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX }; });
+  let q = 0;
+  return grid.map((e, i) => e || { team: pool[q++ % pool.length], userId: null, name: null, base: aiBase(i, pace) });
+}
