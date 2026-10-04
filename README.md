@@ -15,6 +15,7 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 | <img src="public/guide/lines.webp" width="160" alt="Lines and apexes"> | **3. Change lines, hit apexes.** Swipe left/right between three lines. Drive through the yellow rings on the inside of corners to fill boost; inside lines are shorter. |
 | <img src="public/guide/boost.webp" width="160" alt="Boost"> | **4. Boost.** Swipe up (↑ / Space) once the bar passes the notch for 25% more speed. |
 | <img src="public/guide/drs.webp" width="160" alt="DRS"> | **5. DRS.** On the teal straights, get within a second of the car ahead and **DRS READY** appears. Swipe up to open it. |
+| | **Brake.** Press and hold the screen without swiping (↓ / S on a keyboard) to brake and tuck in behind a car instead of hitting it. |
 | | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
 | | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
 

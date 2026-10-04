@@ -160,19 +160,23 @@ export default function App() {
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    let ptr: { x: number; y: number } | null = null;
+    // Press and hold still for 150 ms = brake; moving more than 14 px first makes it a swipe/drag.
+    let ptr: { x: number; y: number; moved: boolean } | null = null, brakeTimer = 0;
     const down = (e: PointerEvent) => {
-      ptr = { x: e.clientX, y: e.clientY };
+      ptr = { x: e.clientX, y: e.clientY, moved: false };
       if (screenRef.current === 'lights') engine.throttleDown();
+      if (screenRef.current === 'race') brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
     };
     const move = (e: PointerEvent) => {
-      if (!ptr || engine.controls !== 'tilt' || screenRef.current !== 'race') return;
-      engine.dragSteer = clamp((e.clientX - ptr.x) / 70, -1, 1);
+      if (!ptr || screenRef.current !== 'race') return;
+      if (!ptr.moved && !engine.brakeTouch && Math.hypot(e.clientX - ptr.x, e.clientY - ptr.y) > 14) { ptr.moved = true; clearTimeout(brakeTimer); }
+      if (engine.controls === 'tilt' && ptr.moved) engine.dragSteer = clamp((e.clientX - ptr.x) / 70, -1, 1);
     };
     const up = (e: PointerEvent) => {
-      const p = ptr; ptr = null; engine.dragSteer = 0;
+      const p = ptr, braked = engine.brakeTouch;
+      ptr = null; engine.dragSteer = 0; engine.brakeTouch = false; clearTimeout(brakeTimer);
       if (screenRef.current === 'lights') return engine.throttleUp();
-      if (!p || screenRef.current !== 'race') return;
+      if (!p || braked || screenRef.current !== 'race') return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y, tilt = engine.controls === 'tilt';
       if (!tilt && Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy)) engine.lane(Math.sign(dx));
       else if (dy < -34 && Math.abs(dy) > Math.abs(dx)) engine.action();
@@ -191,10 +195,12 @@ export default function App() {
       if (k === 'ArrowLeft' || k === 'a') { e.preventDefault(); if (tilt) engine.keySteer = -1; else if (!e.repeat) engine.lane(-1); }
       if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); if (tilt) engine.keySteer = 1; else if (!e.repeat) engine.lane(1); }
       if (k === 'ArrowUp' || k === 'w' || k === ' ') { e.preventDefault(); if (!e.repeat) engine.action(); }
+      if (k === 'ArrowDown' || k === 's') { e.preventDefault(); engine.brakeKey = true; }
     };
     const ku = (e: KeyboardEvent) => {
       if (screenRef.current === 'lights' && [' ', 'ArrowUp', 'Enter'].includes(e.key)) return engine.throttleUp();
       if (['ArrowLeft', 'a', 'ArrowRight', 'd'].includes(e.key)) engine.keySteer = 0;
+      if (e.key === 'ArrowDown' || e.key === 's') engine.brakeKey = false;
     };
     const ori = (e: DeviceOrientationEvent) => {
       if (e.gamma != null) engine.gyroSteer = Math.abs(e.gamma) < 4 ? 0 : clamp(e.gamma / 22, -1, 1);

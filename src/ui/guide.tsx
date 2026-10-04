@@ -73,6 +73,11 @@ const STEPS: Step[] = [
     keys: '↑ or Space',
   },
   {
+    title: 'Brake', art: <HazardArt />,
+    body: <><Y c="#E10600">Press and hold</Y> the screen (without swiping) to brake. Use it to tuck in behind a car instead of hitting it, then swipe out and pass.</>,
+    keys: 'Hold ↓ or S',
+  },
+  {
     title: 'Keep it clean', art: <HazardArt />,
     body: <>Hitting cars or the wall scrubs speed. Tyres wear as you race, and when it <Y c="#3B6CFF">rains</Y> you get less grip and see less of the road.</>,
   },

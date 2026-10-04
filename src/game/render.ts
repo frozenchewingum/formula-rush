@@ -162,6 +162,7 @@ function drawCar(ctx: CanvasRenderingContext2D, c: Car, heading: number, wx: num
   if (c.stripe) rect(-1.9, 2.4, -0.1, 0.1, c.stripe);
   rect(2.2, 2.65, -1.2, 1.2, c.dark);
   rect(-2.6, -2.15, -0.95, 0.95, '#151515');
+  if (c.brakeOn) rect(-2.75, -2.55, -0.35, 0.35, '#FF2A1A');
   rect(-0.8, 0.15, -0.3, 0.3, '#0E0E11');
   if (c.name) {
     const tp = P(0, 0);
