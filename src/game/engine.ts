@@ -124,7 +124,7 @@ export class Engine {
     this.last = now;
     if (this.mp && this.net && (this.g.running || this.screen === 'lights')) this.mpLights();
     if (this.g.running) this.step(dt);
-    if (this.canvas) drawWorld(this, this.canvas, dt);
+    if (this.canvas && (this.screen === 'lights' || this.screen === 'race')) drawWorld(this, this.canvas, dt);
     if (now - this.hudT > 100) { this.hudT = now; this.pushHud(); }
   }
 
@@ -459,8 +459,10 @@ export class Engine {
         const cross = justFinished ? pl.finishTime : g.t;
         const lt = cross - g.lapStart;
         g.lapStart = cross;
-        if (!g.best || lt < g.best) { g.best = lt; if (!justFinished) this.toast('FASTEST LAP', '#A855F7'); }
-        else if (lapN === g.laps - 1) this.toast('FINAL LAP', '#FFD400');
+        const fastest = !g.best || lt < g.best;
+        if (fastest) g.best = lt;
+        if (lapN === g.laps - 1) this.toast('FINAL LAP', '#FFD400');
+        else if (fastest && !justFinished) this.toast('FASTEST LAP', '#A855F7');
       }
     }
     if (pl.finished) return;

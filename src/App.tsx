@@ -179,7 +179,7 @@ export default function App() {
     const kd = (e: KeyboardEvent) => {
       const s = screenRef.current, k = e.key;
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current) return startSolo();
+      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current && !(e.target as HTMLElement)?.closest?.('button')) return startSolo();
       if (s === 'lights' && (k === ' ' || k === 'ArrowUp' || k === 'Enter')) { e.preventDefault(); if (!e.repeat) engine.throttleDown(); return; }
       if (s !== 'race') return;
       const tilt = engine.controls === 'tilt';
