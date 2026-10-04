@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Engine, type Screen, type MpStart } from './game/engine';
 import { clamp, DEFAULT_SETTINGS, TEAMS, type Controls, type Settings } from './game/constants';
 import { RoomSession } from './net/room';
+import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Garage, SettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
@@ -10,6 +11,8 @@ const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(
 
 export default function App() {
   const engine = useMemo(() => new Engine(), []);
+  const music = useMemo(() => new Music(), []);
+  const [muted, setMuted] = useState(music.muted);
   const ui = useSyncExternalStore(engine.subscribe, engine.getUi);
   const [screen, setScreenState] = useState<Screen>('garage');
   const [team, setTeam] = useState(() => +(localStorage.getItem('fr-team') || 0) % TEAMS.length);
@@ -45,6 +48,31 @@ export default function App() {
   useEffect(() => { engine.controls = controls; localStorage.setItem('fr-controls', controls); }, [engine, controls]);
   useEffect(() => { engine.settings = settings; localStorage.setItem('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
+
+  // ---------- soundtrack ----------
+  useEffect(() => {
+    const unlock = (e: Event) => {
+      if (e instanceof KeyboardEvent && (e.key === 'm' || e.key === 'M') && (e.target as HTMLElement)?.tagName !== 'INPUT') {
+        music.setMuted(!music.muted); setMuted(music.muted);
+      }
+      music.unlock();
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); music.dispose(); };
+  }, [music]);
+  useEffect(() => {
+    const scene: Scene = screen === 'lights' ? 'lights' : screen === 'race' ? 'race' : screen === 'results' ? 'results' : 'menu';
+    music.setScene(scene);
+  }, [music, screen]);
+  useEffect(() => { music.setLights(ui.lights); }, [music, ui.lights]);
+  useEffect(() => { if (ui.phase === 'green' && screen === 'lights') music.hit(); }, [music, ui.phase, screen]);
+  useEffect(() => {
+    music.setFinalLap(screen === 'race' && ui.hud.laps > 1 && ui.hud.lap === ui.hud.laps);
+    music.setBoost(ui.hud.boostOn || ui.hud.drsOn);
+    music.setRain(ui.hud.rain);
+  }, [music, screen, ui.hud]);
+  const toggleMusic = () => { music.unlock(); music.setMuted(!music.muted); setMuted(music.muted); };
 
   // deep link ?room=CODE
   useEffect(() => {
@@ -201,7 +229,7 @@ export default function App() {
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
-            openSettings={() => setShowSettings(true)} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            openSettings={() => setShowSettings(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showSettings && <SettingsSheet settings={settings} set={setSettings} close={() => setShowSettings(false)} />}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}

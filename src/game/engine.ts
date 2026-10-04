@@ -22,7 +22,7 @@ type Snap = { t: number; p: number; d: number; v: number; y: number };
 
 export type Hud = {
   pos: number; lap: number; laps: number; time: string; best: string; boost: number; tyre: number;
-  kmh: number; drsReady: boolean; drsOn: boolean; slip: boolean; rain: boolean; field: number;
+  kmh: number; drsReady: boolean; drsOn: boolean; boostOn: boolean; slip: boolean; rain: boolean; field: number;
 };
 export type ResultRow = { pos: number; name: string; color: string; gap: string; you: boolean };
 export type Summary = { pos: number; gained: string; time: string; best: string; apex: string; contacts: string };
@@ -64,7 +64,7 @@ type Game = {
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
 };
 
-const emptyHud = (laps: number): Hud => ({ pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, slip: false, rain: false, field: GRID_SIZE });
+const emptyHud = (laps: number): Hud => ({ pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, boostOn: false, slip: false, rain: false, field: GRID_SIZE });
 
 export class Engine {
   T: Track = buildTrack();
@@ -541,7 +541,7 @@ export class Engine {
       hud: {
         pos, lap, laps: g.laps, time: fmt(pl.p > 0 && !pl.finished ? g.t - g.lapStart : 0), best: g.best ? fmt(g.best) : '—',
         boost: Math.round(g.boost), tyre: Math.round(g.tyre * 100), kmh: Math.round(pl.v * 4.1),
-        drsReady: g.drsReady, drsOn: g.drsOn, slip: g.slip && !g.drsOn, rain: this.isRain(), field: g.cars.length,
+        drsReady: g.drsReady, drsOn: g.drsOn, boostOn: g.boostT > 0, slip: g.slip && !g.drsOn, rain: this.isRain(), field: g.cars.length,
       },
     });
   }

@@ -72,6 +72,12 @@ A room of n drivers costs n·(n−1)·rate Realtime messages/second, since every
 
 Room invites use `?room=CODE` deep links; `404.html` is a copy of the app so links always load.
 
+## Soundtrack
+
+`src/audio/music.ts` is an original score synthesized live with Web Audio, so there are no audio files and nothing to license. It's in D minor at 120 BPM, built from a pulsing 16th-note ostinato, a pedal bass, low brass swells and drums. Layers follow the race: a calm pad in the Garage, a heartbeat and ticking that build with each red light, a hit on lights-out, the full groove while racing (brighter on boost/DRS, darker in rain), and extra percussion and a high line on the final lap.
+
+Audio starts on the first tap or key press (a browser rule). Toggle it with the speaker button in the Garage or the **M** key; the choice is remembered.
+
 ## Controls
 
 | Input | Action |
@@ -80,6 +86,7 @@ Room invites use `?room=CODE` deep links; `404.html` is a copy of the app so lin
 | ↑ / Space / swipe up | DRS when ready, otherwise boost (35 of the meter) |
 | hold, release on green | launch; releasing on red is a +1 s jump start |
 | Tilt mode | drag, tilt or hold arrows to steer; tap the right edge to boost |
+| M | music on/off |
 
 Hit yellow apex rings for +30 boost. Inside lines are shorter.
 

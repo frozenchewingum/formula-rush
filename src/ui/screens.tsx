@@ -19,16 +19,24 @@ function Btn({ onClick, style, children, disabled, className }: { onClick?: () =
 export function Garage(p: {
   team: number; setTeam: (t: number) => void; controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
-  openSettings: () => void; busy: string; err: string; pb: number | null; online: boolean;
+  openSettings: () => void; muted: boolean; toggleMusic: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt';
   return (
     <div className="screen" style={{ ...full, padding: 'var(--pad-top) 24px var(--pad-bottom)', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 60, lineHeight: 0.85 }}>FORMULA<br /><span style={{ color: '#E10600' }}>RUSH</span></div>
+        <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" aria-label={p.muted ? 'Turn music on' : 'Turn music off'} aria-pressed={!p.muted} title="Music (M)" className="icon-btn" onClick={p.toggleMusic}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 5 6 9H2v6h4l5 4V5z" />
+            {p.muted ? <path d="m23 9-6 6M17 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />}
+          </svg>
+        </button>
         <button type="button" aria-label="Race settings" className="icon-btn" onClick={p.openSettings}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
         </button>
+        </div>
       </div>
       <div style={{ flex: 1, minHeight: 160, borderRadius: 16, background: 'repeating-linear-gradient(90deg,#1A1A1E 0 2px,transparent 2px 40px),#141417', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
         <div style={{ width: 64, height: 150, borderRadius: '14px 14px 10px 10px', background: `linear-gradient(${tm.color},${tm.dark})`, position: 'relative' }}>
