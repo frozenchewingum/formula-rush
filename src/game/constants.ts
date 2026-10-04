@@ -1,6 +1,6 @@
 export type Team = { name: string; color: string; dark: string };
 
-// 11 teams × 2 drivers = 22 cars, matching the real 2026 F1 grid.
+// 11 teams. A race has 12 cars: fewer cars means fewer three-wide walls to get stuck behind.
 export const TEAMS: Team[] = [
   { name: 'Vantor', color: '#E10600', dark: '#9A0400' },
   { name: 'Kestrel', color: '#00D2BE', dark: '#00877A' },
@@ -15,14 +15,14 @@ export const TEAMS: Team[] = [
   { name: 'Lumen', color: '#A3E635', dark: '#6B9A1E' },
 ];
 
-export const GRID_SIZE = TEAMS.length * 2; // 22
-export const MAX_PLAYERS = 4; // humans per room; AI fills the rest of the 22-car grid
+export const GRID_SIZE = 12;
+export const MAX_PLAYERS = 4; // humans per room; AI fills the rest of the grid
 export const MIN_PLAYERS = 2;
 
 export const LANE = 4.6;
 export const HALF = 7.5;
 export const VMAX = 78;
-export const GRID_SLOT = 14; // solo: player starts P15 of 22, same mid-pack spot as P7 of 10
+export const GRID_SLOT = 7; // solo: player starts P8 of 12, mid-pack
 export const TRACK_ID = 'circuit-1';
 
 /**
