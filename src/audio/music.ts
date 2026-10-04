@@ -1,5 +1,6 @@
 // Original reactive score, synthesized live with Web Audio (no audio files, no licensing).
-// D minor, 120 BPM: pulsing 16th-note ostinato, pedal bass, low brass swells and drums.
+// Four sister tracks (minor keys, 116–128 BPM): pulsing 16th-note ostinato, pedal bass, low brass swells
+// and drums. Each race moves to the next track.
 // Layers fade in and out with the race state: garage → lights → race → final lap → results.
 
 export type Scene = 'menu' | 'lights' | 'race' | 'results';
@@ -15,19 +16,26 @@ const MIX: Record<Scene, Partial<Record<Layer, number>>> = {
 };
 const FINAL_LAP: Partial<Record<Layer, number>> = { high: 0.26, snare: 0.38, hats: 0.36 };
 
-const BPM = 120;
-const SIXTEENTH = 60 / BPM / 4;
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 
-// i – VI – III – VII in D minor (Dm, Bb, F, C), MIDI roots in octave 2 plus chord tones.
-const PROG = [
-  { root: 38, tones: [50, 53, 57] }, // Dm
-  { root: 34, tones: [46, 50, 53] }, // Bb
-  { root: 41, tones: [53, 57, 60] }, // F
-  { root: 36, tones: [48, 52, 55] }, // C
+type Chord = { root: number; tones: number[] };
+/** Chord from a MIDI root in octave 2: triad one octave up, minor or major. */
+const ch = (root: number, minor: boolean): Chord => ({ root, tones: [root + 12, root + (minor ? 15 : 16), root + 19] });
+
+/**
+ * Sister tracks: same instruments and race-reactive layers, different key, tempo,
+ * 4-bar progression and 16-step ostinato (indexes into chord tones 0–2 and the octave above 3–5).
+ */
+export const TRACKS: { name: string; bpm: number; prog: Chord[]; ost: number[] }[] = [
+  // i – VI – III – VII in D minor (Dm Bb F C)
+  { name: 'Lights Out', bpm: 120, prog: [ch(38, true), ch(34, false), ch(41, false), ch(36, false)], ost: [0, 1, 2, 1, 3, 1, 2, 1, 0, 1, 2, 4, 3, 2, 1, 2] },
+  // i – VI – III – VII in E minor (Em C G D), faster, rising arpeggio
+  { name: 'Slipstream', bpm: 128, prog: [ch(40, true), ch(36, false), ch(43, false), ch(38, false)], ost: [0, 2, 1, 2, 3, 2, 4, 2, 0, 2, 1, 2, 5, 4, 3, 2] },
+  // i – iv – VI – V in A minor (Am Dm F E): the major V gives it a harmonic-minor bite
+  { name: 'Apex Hunter', bpm: 124, prog: [ch(45, true), ch(38, true), ch(41, false), ch(40, false)], ost: [0, 1, 2, 3, 2, 1, 0, 1, 0, 2, 4, 3, 5, 3, 2, 1] },
+  // i – VII – VI – VII in C minor (Cm Bb Ab Bb), slower and darker
+  { name: 'Night Race', bpm: 116, prog: [ch(36, true), ch(34, false), ch(32, false), ch(34, false)], ost: [0, 0, 2, 1, 3, 1, 2, 0, 0, 0, 2, 1, 4, 3, 2, 1] },
 ];
-// 16-step ostinato over the chord tones (0–2) and the octave above (3–5).
-const OST = [0, 1, 2, 1, 3, 1, 2, 1, 0, 1, 2, 4, 3, 2, 1, 2];
 
 export class Music {
   private ctx: AudioContext | null = null;
@@ -43,12 +51,15 @@ export class Music {
   private lights = 0;
   private boost = false;
   private rain = false;
+  private track = 0;
+  private sixteenth = 60 / TRACKS[0].bpm / 4;
   muted: boolean;
 
   constructor() {
     let m = false;
     try { m = localStorage.getItem('fr-music') === 'off'; } catch { /* storage blocked */ }
     this.muted = m;
+    this.setTrack(Math.floor(Math.random() * TRACKS.length));
   }
 
   /** Must be called from a user gesture (tap / key) so the browser allows audio. */
@@ -96,9 +107,16 @@ export class Music {
     if (s === this.scene) return;
     this.scene = s;
     if (s !== 'race') this.finalLap = false;
-    if (s === 'lights') this.lights = 0;
+    if (s === 'lights') { this.lights = 0; this.setTrack(this.track + 1); }
     this.applyMix(s === 'race' ? 0.05 : 0.6);
   }
+  /** Switch tracks on the next bar line so the groove never stutters. */
+  setTrack(i: number) {
+    this.track = ((i % TRACKS.length) + TRACKS.length) % TRACKS.length;
+    this.sixteenth = 60 / TRACKS[this.track].bpm / 4;
+    this.step = Math.ceil(this.step / 16) * 16;
+  }
+  get trackName() { return TRACKS[this.track].name; }
   setFinalLap(on: boolean) { if (on !== this.finalLap) { this.finalLap = on; this.applyMix(0.8); } }
   setLights(n: number) { this.lights = n; }
   setBoost(on: boolean) { this.boost = on; }
@@ -110,7 +128,7 @@ export class Music {
     if (!ctx) return;
     const t = ctx.currentTime + 0.02;
     this.cymbal(t, 0.5);
-    this.swell(t, PROG[0].root, 1.6, 0.9, true);
+    this.swell(t, TRACKS[this.track].prog[0].root, 1.6, 0.9, true);
     this.kick(t, 1);
   }
 
@@ -129,7 +147,7 @@ export class Music {
     this.ostFilter.frequency.setTargetAtTime(this.boost ? base * 2.4 : base, ctx.currentTime, this.boost ? 0.05 : 0.4);
     while (this.nextT < ctx.currentTime + 0.12) {
       this.play(this.step, this.nextT);
-      this.nextT += SIXTEENTH;
+      this.nextT += this.sixteenth;
       this.step++;
     }
   }
@@ -137,14 +155,15 @@ export class Music {
   private play(step: number, t: number) {
     const s16 = step % 16, bar = Math.floor(step / 16);
     // The lights hold on the tonic for tension; everything else walks the progression.
-    const chord = this.scene === 'lights' ? PROG[0] : PROG[bar % 4];
+    const { prog, ost } = TRACKS[this.track], barLen = this.sixteenth * 16;
+    const chord = this.scene === 'lights' ? prog[0] : prog[bar % 4];
     if (s16 === 0) {
-      this.pad(t, chord.tones, SIXTEENTH * 16);
-      if (bar % 2 === 0) this.swell(t, chord.root, SIXTEENTH * 16 * 1.6, 0.6, false);
+      this.pad(t, chord.tones, barLen);
+      if (bar % 2 === 0) this.swell(t, chord.root, barLen * 1.6, 0.6, false);
     }
     const tones = [...chord.tones, ...chord.tones.map(n => n + 12)];
-    this.pluck(t, midi(tones[OST[s16]] + 12), this.ostFilter, 0.16);
-    if (s16 % 2 === 0) this.pluck(t, midi(tones[OST[(s16 + 5) % 16]] + 24), this.gains.high, 0.08, 'square', 0.18);
+    this.pluck(t, midi(tones[ost[s16]] + 12), this.ostFilter, 0.16);
+    if (s16 % 2 === 0) this.pluck(t, midi(tones[ost[(s16 + 5) % 16]] + 24), this.gains.high, 0.08, 'square', 0.18);
     if (s16 % 2 === 0) this.bass(t, midi(chord.root + (s16 === 14 ? 7 : 0)));
     if (s16 % 4 === 0) this.kick(t, 0.9);
     if (this.scene === 'lights' && this.lights > 0 && s16 % 2 === 0) this.hat(t, 0.35 + this.lights * 0.08);
