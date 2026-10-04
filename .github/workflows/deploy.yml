@@ -28,9 +28,11 @@ jobs:
         env:
           URL: ${{ vars.VITE_SUPABASE_URL }}
           KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          RT: ${{ vars.VITE_RT_MSGS_PER_SEC }}
         run: |
           if [ -n "$URL" ]; then echo "VITE_SUPABASE_URL=$URL" >> .env.production.local; fi
           if [ -n "$KEY" ]; then echo "VITE_SUPABASE_ANON_KEY=$KEY" >> .env.production.local; fi
+          if [ -n "$RT" ]; then echo "VITE_RT_MSGS_PER_SEC=$RT" >> .env.production.local; fi
       - name: Build
         run: npm run build
         env:
