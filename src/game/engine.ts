@@ -138,10 +138,8 @@ export class Engine {
     let grid: GridEntry[];
     if (mp) grid = mp.grid;
     else {
-      const ti = this.team, pool: number[] = [];
-      for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
-      pool.splice(pool.indexOf(ti), 1);
-      shuffle(pool);
+      // AI: one car per team (your teammate included), so every team shows up once.
+      const ti = this.team, pool = shuffle(TEAMS.map((_, t) => t)).slice(0, GRID_SIZE - 1);
       const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
       grid = teams.map((t, i) => i === GRID_SLOT
         ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
@@ -582,8 +580,8 @@ export function makeRainPlan(weather: Settings['weather'], laps: number, trackL:
 }
 
 /**
- * Host builds the shared 22-car grid. Humans get random spots in a mid-pack window
- * (P7–P14 for up to 8 drivers, widening as the room grows); AI fills everything else.
+ * Host builds the shared grid. Humans get random spots in a mid-pack window
+ * (P4–P9 on the 12-car grid); AI fills everything else.
  */
 export function buildMpGrid(players: { userId: string; name: string; team: number; livery?: Livery; accent?: number }[], aiPace: Settings['aiPace']): GridEntry[] {
   const pace = PACE[aiPace] || 0.955;
@@ -592,8 +590,8 @@ export function buildMpGrid(players: { userId: string; name: string; team: numbe
   for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
   for (const p of humans) { const k = pool.indexOf(p.team); if (k >= 0) pool.splice(k, 1); }
   shuffle(pool);
-  const win = Math.max(8, humans.length);
-  const first = clamp(Math.round(GRID_SIZE / 2) - Math.ceil(win / 2) - 1, 0, GRID_SIZE - win);
+  const win = Math.max(Math.ceil(GRID_SIZE / 2), humans.length);
+  const first = clamp(Math.round((GRID_SIZE - win) / 2), 0, GRID_SIZE - win);
   const slots = shuffle(Array.from({ length: win }, (_, k) => first + k));
   const grid: (GridEntry | null)[] = new Array(GRID_SIZE).fill(null);
   humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX, livery: p.livery, accent: p.accent }; });

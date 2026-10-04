@@ -2,7 +2,7 @@
 
 **v1.4** · Garage v2 (3D car, liveries, accents) and race settings sheet. See [Garage](#garage).
 
-Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 22-car grid (11 teams × 2, like the 2026 F1 grid), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
+Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
 **Loop:** Garage → Lights Out (throttle launch) → Race → Results. Multiplayer: Create Room / Join Room (4-character code) → Lobby → synchronized start.
 
@@ -10,13 +10,13 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 
 | | |
 |---|---|
-| <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Spin the 3D car, pick a team (‹ › or the TEAM tab), a livery and an accent colour, choose Swipe or Tilt, set laps and weather, then tap **RACE** to take on 21 AI drivers. |
+| <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Spin the 3D car, pick a team (‹ › or the TEAM tab), a livery and an accent colour, choose Swipe or Tilt, set laps and weather, then tap **RACE** to take on 11 AI drivers. |
 | <img src="public/guide/launch.webp" width="160" alt="Launch"> | **2. Nail the launch.** Hold the screen (or Space) while the five red lights come on and let go the instant they turn green. Letting go early costs a second. |
 | <img src="public/guide/lines.webp" width="160" alt="Lines and apexes"> | **3. Change lines, hit apexes.** Swipe left/right between three lines. Drive through the yellow rings on the inside of corners to fill boost; inside lines are shorter. |
 | <img src="public/guide/boost.webp" width="160" alt="Boost"> | **4. Boost.** Swipe up (↑ / Space) once the bar passes the notch for 25% more speed. |
 | <img src="public/guide/drs.webp" width="160" alt="DRS"> | **5. DRS.** On the teal straights, get within a second of the car ahead and **DRS READY** appears. Swipe up to open it. |
 | | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
-| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 22-car grid. |
+| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
 
 The same guide opens in the game on first launch and from the **?** button in the Garage. Clips are real gameplay captured from the game.
 
@@ -81,7 +81,7 @@ Hero stage with the 3D car (auto-spin, drag to spin with inertia, a spin kick on
 Client-authoritative for your own car, Supabase Realtime as the relay. Channel `race:{roomId}`:
 
 - **Presence** `{ userId }` shows who is connected. If a player is gone for 8 s the host removes them; if the host is gone, the oldest player claims host.
-- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`; each grid entry carries the driver's team, livery and accent. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start in random mid-pack spots (P7–P14); AI takes the other 18–20 spots on the 22-car grid. The host needs at least 2 ready drivers to start.
+- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`; each grid entry carries the driver's team, livery and accent. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start in random mid-pack spots (P4–P9); AI takes the other 8–10 spots on the 12-car grid. The host needs at least 2 ready drivers to start.
 - **`state`**: `{ id, t, p, d, v, y, b, r }` in race time. The send rate adapts to room size so the whole room stays inside the Realtime quota: every update is delivered to every other driver, so a room of n drivers costs n·(n−1)·rate messages/second. Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. The host also sends AI cars and their finish times; if the host leaves mid-race the new host takes over the AI.
 - **`finish`**: `{ id, finishTime, best }`. Results update live as drivers cross the line.
 
@@ -89,7 +89,7 @@ Contacts are resolved by each client for its own car only.
 
 ### Realtime quota
 
-A room of n drivers costs n·(n−1)·rate Realtime messages/second, since every update reaches every other driver. The rate adapts to stay under `VITE_RT_MSGS_PER_SEC` (default 80; Supabase Free allows 100/s): 10 Hz for 2–3 drivers, ~7 Hz for 4. The host's AI cars ride along in the host's own updates, so the 18–20 AI cars cost nothing extra.
+A room of n drivers costs n·(n−1)·rate Realtime messages/second, since every update reaches every other driver. The rate adapts to stay under `VITE_RT_MSGS_PER_SEC` (default 80; Supabase Free allows 100/s): 10 Hz for 2–3 drivers, ~7 Hz for 4. The host's AI cars ride along in the host's own updates, so the 8–10 AI cars cost nothing extra.
 
 ## Deploy
 
