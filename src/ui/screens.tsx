@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { TEAMS, CODE_ABC, GRID_SIZE, GRID_SLOT, MAX_PLAYERS, MIN_PLAYERS, type Controls, type Settings, type Weather, type AiPace, fmt } from '../game/constants';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  TEAMS, CODE_ABC, GRID_SIZE, MAX_PLAYERS, MIN_PLAYERS, ACCENTS, LIVERIES, LAP_OPTS, WEATHER_OPTS,
+  liveryName, liveryTile, isLivery, weatherMeta, fmt, type Controls, type Settings, type Weather, type AiPace, type Livery,
+} from '../game/constants';
+import { CarStage } from './CarStage';
 import type { UiState } from '../game/engine';
 import type { PlayerRow, RoomSession } from '../net/room';
 
@@ -15,100 +19,231 @@ function Btn({ onClick, style, children, disabled, className }: { onClick?: () =
   );
 }
 
-// ---------------- Garage ----------------
+// ---------------- Garage (v2) ----------------
+type GTab = 'team' | 'livery' | 'accent';
+
 export function Garage(p: {
-  team: number; setTeam: (t: number) => void; controls: Controls; setControls: (c: Controls) => void;
+  team: number; setTeam: (t: number) => void; livery: Livery; setLivery: (l: Livery) => void; accent: number; setAccent: (a: number) => void;
+  controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
   openSettings: () => void; openGuide: () => void; muted: boolean; toggleMusic: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
-  const tm = TEAMS[p.team], tilt = p.controls === 'tilt';
+  const tm = TEAMS[p.team], tilt = p.controls === 'tilt', n = TEAMS.length;
+  const [tab, setTab] = useState<GTab>(() => (sessionStorage.getItem('fr-gtab') as GTab) || 'team');
+  const pickTab = (t: GTab) => { setTab(t); try { sessionStorage.setItem('fr-gtab', t); } catch { /* storage blocked */ } };
+  const teamRow = useRef<HTMLDivElement>(null);
+  // keep the selected team tile in view (11 teams scroll horizontally)
+  useEffect(() => {
+    const el = teamRow.current?.children[p.team] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [p.team, tab]);
+  const paint = useMemo(() => ({ color: tm.color, dark: tm.dark, accent: ACCENTS[p.accent] || ACCENTS[0], livery: p.livery }), [tm, p.accent, p.livery]);
+  const arrow: CSSProperties = { position: 'absolute', top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, border: 0, background: 'rgba(14,14,17,.6)', color: '#C8C8CE', fontSize: 22, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 };
+  const tile = (on: boolean, border: string): CSSProperties => ({ height: 64, borderRadius: 10, background: on ? '#1E1E22' : '#151518', border: `1.5px solid ${on ? border : '#151518'}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', padding: 0, color: on ? '#F2F2F2' : '#8A8A92', fontSize: 11, fontWeight: 600, fontFamily: 'Barlow, sans-serif' });
   return (
-    <div className="screen" style={{ ...full, padding: 'var(--pad-top) 24px var(--pad-bottom)', gap: 20 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: -16 }}>
-        <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 60, lineHeight: 0.85 }}>FORMULA<br /><span style={{ color: '#E10600' }}>RUSH</span></div>
-        <div style={{ display: 'flex', gap: 8, order: -1, alignSelf: 'flex-end' }}>
-        <button type="button" aria-label="How to play" title="How to play" className="icon-btn" onClick={p.openGuide}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
-        </button>
-        <button type="button" aria-label={p.muted ? 'Turn music on' : 'Turn music off'} aria-pressed={!p.muted} title="Music (M)" className="icon-btn" onClick={p.toggleMusic}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 5 6 9H2v6h4l5 4V5z" />
-            {p.muted ? <path d="m23 9-6 6M17 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />}
-          </svg>
-        </button>
-        <button type="button" aria-label="Race settings" className="icon-btn" onClick={p.openSettings}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-        </button>
+    <div className="screen" style={{ ...full }}>
+      {/* ---------- hero ---------- */}
+      <div className="garage-hero" style={{ position: 'relative', flex: '1 1 404px', minHeight: 300, maxHeight: 404, background: 'radial-gradient(ellipse 80% 55% at 50% 66%,#23232A 0%,#141418 55%,#0E0E11 100%)', overflow: 'hidden' }}>
+        <div aria-hidden style={{ ...display, position: 'absolute', left: -10, right: -10, top: '24%', textAlign: 'center', fontWeight: 900, fontStyle: 'italic', fontSize: 118, lineHeight: 1, letterSpacing: '-.01em', color: tm.color, opacity: 0.16, pointerEvents: 'none', whiteSpace: 'nowrap', transition: 'color .3s' }}>{tm.name.toUpperCase()}</div>
+        <CarStage paint={paint} style={{ left: 0, right: 0, top: 'calc(var(--pad-top) + 26px)', bottom: 56 }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 'var(--pad-top) 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, pointerEvents: 'none' }}>
+          <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 26, lineHeight: 1 }}>FORMULA <span style={{ color: '#E10600' }}>RUSH</span></div>
+          <div role="radiogroup" aria-label="Controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'rgba(26,26,30,.9)', borderRadius: 22, padding: 3, pointerEvents: 'auto' }}>
+            {(['swipe', 'tilt'] as Controls[]).map(c => {
+              const on = (c === 'tilt') === tilt;
+              return (
+                <button type="button" role="radio" aria-checked={on} key={c} onClick={() => p.setControls(c)}
+                  style={{ height: 38, padding: '0 14px', borderRadius: 19, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
+                  {c === 'swipe' ? 'Swipe' : 'Tilt'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ position: 'absolute', top: 'calc(var(--pad-top) + 50px)', right: 12, display: 'flex', gap: 6, zIndex: 2 }}>
+          <button type="button" aria-label="How to play" title="How to play" className="icon-btn round" onClick={p.openGuide}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
+          </button>
+          <button type="button" aria-label={p.muted ? 'Turn music on' : 'Turn music off'} aria-pressed={!p.muted} title="Music (M)" className="icon-btn round" onClick={p.toggleMusic}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 5 6 9H2v6h4l5 4V5z" />
+              {p.muted ? <path d="m23 9-6 6M17 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />}
+            </svg>
+          </button>
+        </div>
+        <button type="button" className="hero-arrow" aria-label="Previous team" onClick={() => p.setTeam((p.team + n - 1) % n)} style={{ ...arrow, left: 8 }}>‹</button>
+        <button type="button" className="hero-arrow" aria-label="Next team" onClick={() => p.setTeam((p.team + 1) % n)} style={{ ...arrow, right: 8 }}>›</button>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '0 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, pointerEvents: 'none' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 4, height: 22, borderRadius: 2, background: tm.color }} />
+              <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1 }}>{tm.name.toUpperCase()}</div>
+            </div>
+            <div style={{ ...mono, fontSize: 11, letterSpacing: '.12em', color: '#8A8A92' }}>#07 · {liveryName(p.livery).toUpperCase()} LIVERY</div>
+          </div>
+          <div style={{ ...mono, fontSize: 11, textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {p.pb != null && <span style={{ color: '#A855F7' }}>PB {fmt(p.pb)}</span>}
+            <span style={{ color: '#5A5A62' }}>DRAG TO SPIN</span>
+          </div>
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 160, borderRadius: 16, background: 'repeating-linear-gradient(90deg,#1A1A1E 0 2px,transparent 2px 40px),#141417', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        <div style={{ width: 64, height: 150, borderRadius: '14px 14px 10px 10px', background: `linear-gradient(${tm.color},${tm.dark})`, position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -6, left: -14, right: -14, height: 12, background: '#222', borderRadius: 3 }} />
-          <div style={{ position: 'absolute', bottom: -4, left: -10, right: -10, height: 14, background: '#222', borderRadius: 3 }} />
-          <div style={{ position: 'absolute', top: 58, left: 20, width: 24, height: 30, borderRadius: 12, background: '#111' }} />
+
+      {/* ---------- controls panel ---------- */}
+      <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 20px var(--pad-bottom)', boxSizing: 'border-box', borderTop: '1px solid #1E1E22' }}>
+        <div role="tablist" aria-label="Customise car" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4, background: '#151518', borderRadius: 10, padding: 4 }}>
+          {([['team', 'TEAM'], ['livery', 'LIVERY'], ['accent', 'ACCENT']] as [GTab, string][]).map(([k, label]) => {
+            const on = tab === k;
+            return (
+              <button type="button" role="tab" aria-selected={on} key={k} onClick={() => pickTab(k)}
+                style={{ ...mono, height: 36, borderRadius: 7, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#8A8A92', fontWeight: 700, fontSize: 11, letterSpacing: '.12em', cursor: 'pointer' }}>
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <div style={{ ...mono, position: 'absolute', bottom: 14, left: 16, fontSize: 12, color: '#8A8A92' }}>{tm.name.toUpperCase()} RACING · #07</div>
-        <div style={{ ...mono, position: 'absolute', bottom: 14, right: 16, fontSize: 12, color: '#8A8A92' }}>{p.settings.laps} LAPS · START P{GRID_SLOT + 1}/{GRID_SIZE}</div>
-        {p.pb != null && <div style={{ ...mono, position: 'absolute', top: 14, right: 16, fontSize: 12, color: '#A855F7' }}>PB {fmt(p.pb)}</div>}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }} role="radiogroup" aria-label="Team">
-        {TEAMS.map((t, i) => (
-          <button type="button" key={t.name} aria-label={t.name} aria-checked={i === p.team} role="radio" onClick={() => p.setTeam(i)}
-            style={{ width: 40, height: 40, borderRadius: '50%', border: 0, padding: 0, background: t.color, outline: i === p.team ? '2px solid #fff' : '2px solid transparent', outlineOffset: 3, cursor: 'pointer' }} />
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: '#1A1A1E', borderRadius: 10, padding: 4 }}>
-        {(['swipe', 'tilt'] as Controls[]).map(c => {
-          const on = (c === 'tilt') === tilt;
-          return (
-            <button type="button" key={c} onClick={() => p.setControls(c)}
-              style={{ textAlign: 'center', padding: 12, borderRadius: 8, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 16, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
-              {c === 'swipe' ? 'Swipe' : 'Tilt'}
-            </button>
-          );
-        })}
-      </div>
-      <Btn className="primary" onClick={p.startSolo} style={{ height: 60, ...display, fontWeight: 800, fontSize: 28, letterSpacing: '.04em' }}>RACE</Btn>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: -8 }}>
-        <Btn className="secondary" disabled={!!p.busy || !p.online} onClick={p.createRoom} style={{ height: 54 }}>{p.busy === 'create' ? 'Creating…' : 'Create Room'}</Btn>
-        <Btn className="secondary" disabled={!!p.busy || !p.online} onClick={p.openJoin} style={{ height: 54 }}>Join Room</Btn>
-      </div>
-      {(p.err || !p.online) && (
-        <div style={{ ...mono, marginTop: -8, padding: '10px 12px', borderRadius: 6, background: '#2A0D0C', color: '#FF6A60', fontWeight: 700, fontSize: 12 }}>
-          {p.err || 'OFFLINE · MULTIPLAYER UNAVAILABLE'}
+        <div role="tabpanel" style={{ height: 64, display: 'flex', alignItems: 'center' }}>
+          {tab === 'team' && (
+            <div ref={teamRow} className="hscroll" role="radiogroup" aria-label="Team" style={{ width: '100%', display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'calc((100% - 24px) / 5)', gap: 6, overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
+              {TEAMS.map((t, i) => (
+                <button type="button" role="radio" aria-checked={i === p.team} key={t.name} onClick={() => p.setTeam(i)} style={{ ...tile(i === p.team, t.color), scrollSnapAlign: 'start' }}>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: `linear-gradient(135deg,${t.color} 0 50%,${t.dark} 50% 100%)` }} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {tab === 'livery' && (
+            <div role="radiogroup" aria-label="Livery" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+              {LIVERIES.map(([k, label]) => {
+                const [body, pod, wing, stripe] = liveryTile(p.team, k, p.accent), on = p.livery === k;
+                return (
+                  <button type="button" role="radio" aria-checked={on} key={k} onClick={() => p.setLivery(k)} style={tile(on, '#F2F2F2')}>
+                    <span style={{ width: 14, height: 30, borderRadius: '7px 7px 4px 4px', background: body, position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                      <span style={{ position: 'absolute', top: -3, left: -6, right: -6, height: 4, borderRadius: 1, background: wing }} />
+                      <span style={{ position: 'absolute', top: 10, left: -5, right: -5, height: 12, borderRadius: 3, background: pod }} />
+                      <span style={{ position: 'absolute', top: 2, bottom: 2, width: 3, borderRadius: 2, background: stripe, zIndex: 1 }} />
+                    </span>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {tab === 'accent' && (
+            <div role="radiogroup" aria-label="Accent colour" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', boxSizing: 'border-box' }}>
+              {ACCENTS.map((c, i) => (
+                <button type="button" role="radio" aria-checked={i === p.accent} aria-label={'Accent ' + c} key={c} onClick={() => p.setAccent(i)}
+                  style={{ width: 44, height: 44, borderRadius: '50%', border: 0, padding: 0, background: c, outline: i === p.accent ? '2px solid #fff' : '2px solid transparent', outlineOffset: 3, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.15)' }} />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        {(p.err || !p.online) && (
+          <div style={{ ...mono, padding: '8px 12px', borderRadius: 6, background: '#2A0D0C', color: '#FF6A60', fontWeight: 700, fontSize: 11 }}>
+            {p.err || 'OFFLINE · MULTIPLAYER UNAVAILABLE'}
+          </div>
+        )}
+        <SettingsBar laps={p.settings.laps} weather={p.settings.weather} canEdit onClick={p.openSettings} />
+        <Btn className="primary" onClick={p.startSolo} style={{ height: 60, borderRadius: 12, justifyContent: 'space-between', padding: '0 22px', ...display, fontWeight: 800, fontSize: 28, letterSpacing: '.04em' }}>
+          <span>RACE</span><span style={{ ...mono, fontSize: 12, fontWeight: 700, letterSpacing: '.1em', opacity: 0.85 }}>SOLO · VS AI →</span>
+        </Btn>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Btn className="ghost" disabled={!!p.busy || !p.online} onClick={p.createRoom}>{p.busy === 'create' ? 'Creating…' : 'Create Room'}</Btn>
+          <Btn className="ghost" disabled={!!p.busy || !p.online} onClick={p.openJoin}>Join Room</Btn>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ---------------- Settings sheet ----------------
-export function SettingsSheet({ settings, set, close }: { settings: Settings; set: (s: Settings) => void; close: () => void }) {
-  const row: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 };
-  const label: CSSProperties = { ...mono, fontSize: 12, letterSpacing: '.2em', color: '#8A8A92' };
-  const seg = <T extends string | number>(opts: T[], val: T, on: (v: T) => void, lab?: (v: T) => string) => (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${opts.length},1fr)`, background: '#1A1A1E', borderRadius: 10, padding: 4 }}>
-      {opts.map(o => (
-        <button type="button" key={String(o)} onClick={() => on(o)}
-          style={{ padding: '10px 4px', minHeight: 44, borderRadius: 8, border: 0, background: o === val ? '#F2F2F2' : 'transparent', color: o === val ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>
-          {lab ? lab(o) : String(o)}
-        </button>
-      ))}
-    </div>
-  );
+// ---------------- Race settings (v1.4) ----------------
+/** 48px bar on Garage + Lobby: LAPS · WEATHER · EDIT › (or SET BY HOST). */
+export function SettingsBar({ laps, weather, canEdit, onClick }: { laps: number; weather: Weather; canEdit: boolean; onClick: () => void }) {
+  const [, label, , dot] = weatherMeta(weather);
+  const lab: CSSProperties = { fontSize: 9, color: '#8A8A92', letterSpacing: '.16em' };
   return (
-    <div className="screen" style={{ ...full, padding: 'var(--pad-top) 24px var(--pad-bottom)', gap: 22, zIndex: 5 }}>
-      <button type="button" className="back" onClick={close}>← GARAGE</button>
-      <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 52, lineHeight: 0.9 }}>RACE<br />SETTINGS</div>
-      <div style={row}>
-        <div style={{ ...label, display: 'flex', justifyContent: 'space-between' }}><span>CAMERA TILT</span><span style={{ color: '#F2F2F2' }}>{settings.cameraTilt}°</span></div>
-        <input type="range" min={35} max={90} step={1} value={settings.cameraTilt} onChange={e => set({ ...settings, cameraTilt: +e.target.value })} aria-label="Camera tilt" />
+    <button type="button" className={'settings-bar' + (canEdit ? '' : ' locked')} onClick={onClick} aria-label={`Race settings: ${laps} laps, ${label} weather${canEdit ? '' : ', set by host'}`}>
+      <span style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '.06em' }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}><span style={lab}>LAPS</span><span>{laps} {laps === 1 ? 'LAP' : 'LAPS'}</span></span>
+        <span style={{ width: 1, height: 24, background: '#2A2A30' }} />
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}><span style={lab}>WEATHER</span><span style={{ color: dot }}>{label.toUpperCase()}</span></span>
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', color: canEdit ? '#F2F2F2' : '#5A5A62' }}>{canEdit ? 'EDIT ›' : 'SET BY HOST'}</span>
+    </button>
+  );
+}
+
+/** Bottom sheet: laps + weather, plus driver tweaks (AI pace, camera tilt) folded under "More". */
+export function RaceSettingsSheet({ settings, set, close, mode }: { settings: Settings; set: (s: Settings) => void; close: () => void; mode: string }) {
+  const [more, setMore] = useState(false);
+  const label: CSSProperties = { ...mono, fontSize: 11, letterSpacing: '.2em', color: '#8A8A92' };
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
+    window.addEventListener('keydown', k, true);
+    return () => window.removeEventListener('keydown', k, true);
+  }, [close]);
+  return (
+    <div className="scrim" onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(5,5,6,.7)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', zIndex: 5 }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Race settings" onClick={e => e.stopPropagation()}
+        style={{ background: '#151518', borderRadius: '20px 20px 0 0', padding: '12px 20px var(--pad-bottom)', display: 'flex', flexDirection: 'column', gap: 18, borderTop: '1px solid #2A2A30', maxHeight: '92%', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: '#3A3A42', alignSelf: 'center', flexShrink: 0 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1 }}>RACE SETTINGS</div>
+          <div style={{ ...mono, fontSize: 11, letterSpacing: '.12em', color: '#8A8A92' }}>{mode}</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={label}>LAPS</div>
+          <div role="radiogroup" aria-label="Laps" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+            {LAP_OPTS.map(([n, sub]) => {
+              const on = settings.laps === n;
+              return (
+                <button type="button" role="radio" aria-checked={on} key={n} onClick={() => set({ ...settings, laps: n })}
+                  style={{ height: 56, borderRadius: 10, border: 0, background: on ? '#F2F2F2' : '#1E1E22', color: on ? '#0E0E11' : '#C8C8CE', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, cursor: 'pointer' }}>
+                  <span style={{ ...display, fontWeight: 800, fontSize: 26, lineHeight: 1 }}>{n}</span>
+                  <span style={{ ...mono, fontSize: 10, opacity: 0.75 }}>{sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={label}>WEATHER</div>
+          <div role="radiogroup" aria-label="Weather" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {WEATHER_OPTS.map(([k, name, desc, dot]) => {
+              const on = settings.weather === k;
+              return (
+                <button type="button" role="radio" aria-checked={on} key={k} onClick={() => set({ ...settings, weather: k })}
+                  style={{ minHeight: 52, borderRadius: 10, background: on ? '#1E1E22' : 'transparent', border: `1.5px solid ${on ? '#F2F2F2' : '#2A2A30'}`, boxSizing: 'border-box', display: 'grid', gridTemplateColumns: '10px 1fr auto', gap: 12, alignItems: 'center', padding: '8px 14px', cursor: 'pointer', textAlign: 'left', fontFamily: 'Barlow, sans-serif' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: dot }} />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><span style={{ fontWeight: 600, fontSize: 15 }}>{name}</span><span style={{ fontSize: 12, color: '#8A8A92' }}>{desc}</span></span>
+                  <span style={{ ...mono, fontSize: 14 }}>{on ? '✓' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <button type="button" className="back" onClick={() => setMore(m => !m)} aria-expanded={more} style={{ alignSelf: 'stretch', justifyContent: 'space-between', fontSize: 11, letterSpacing: '.2em', color: '#8A8A92', minHeight: 32 }}>
+          <span>MORE · AI PACE &amp; CAMERA</span><span>{more ? '−' : '+'}</span>
+        </button>
+        {more && (
+          <>
+            <div role="radiogroup" aria-label="AI pace" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#1E1E22', borderRadius: 10, padding: 4, marginTop: -8 }}>
+              {(['Easy', 'Normal', 'Hard'] as AiPace[]).map(a => {
+                const on = settings.aiPace === a;
+                return (
+                  <button type="button" role="radio" aria-checked={on} key={a} onClick={() => set({ ...settings, aiPace: a })}
+                    style={{ minHeight: 40, borderRadius: 8, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>{a} AI</button>
+                );
+              })}
+            </div>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ ...label, display: 'flex', justifyContent: 'space-between' }}><span>CAMERA TILT</span><span style={{ color: '#F2F2F2' }}>{settings.cameraTilt}°</span></span>
+              <input type="range" min={35} max={90} step={1} value={settings.cameraTilt} onChange={e => set({ ...settings, cameraTilt: +e.target.value })} />
+            </label>
+          </>
+        )}
+        <button type="button" onClick={close} style={{ height: 54, flexShrink: 0, borderRadius: 12, border: 0, background: '#F2F2F2', color: '#0E0E11', fontWeight: 600, fontSize: 16, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>Done</button>
       </div>
-      <div style={row}><div style={label}>WEATHER</div>{seg<Weather>(['Random', 'Dry', 'Rain', 'Rain on final lap'], settings.weather, w => set({ ...settings, weather: w }), w => w === 'Rain on final lap' ? 'Final lap' : w)}</div>
-      <div style={row}><div style={label}>AI PACE</div>{seg<AiPace>(['Easy', 'Normal', 'Hard'], settings.aiPace, a => set({ ...settings, aiPace: a }))}</div>
-      <div style={row}><div style={label}>LAPS</div>{seg<number>([1, 2, 3, 4, 5], settings.laps, l => set({ ...settings, laps: l }))}</div>
-      <div style={{ flex: 1 }} />
-      <Btn className="primary" onClick={close} style={{ height: 60, ...display, fontWeight: 800, fontSize: 26, letterSpacing: '.04em' }}>DONE</Btn>
     </div>
   );
 }
@@ -142,7 +277,7 @@ export function Join(p: { code: string; setCode: (c: string) => void; err: strin
 }
 
 // ---------------- Lobby ----------------
-export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean }) {
+export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean; openSettings: () => void }) {
   const { s } = p, room = s.room!, me = s.me(), host = s.isHost();
   const slots: (PlayerRow | null)[] = [...s.players].sort((a, b) => a.slot - b.slot);
   if (s.players.length < MAX_PLAYERS) slots.push(null);
@@ -166,9 +301,9 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
         </div>
         <button type="button" className="outline" onClick={share}>{shared ? 'Copied' : 'Share'}</button>
       </div>
-      <div style={{ ...mono, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8A8A92' }}>
-        <span>DRIVERS {s.players.length}/{MAX_PLAYERS} · {GRID_SIZE - s.players.length} AI</span>
-        <span>{laps} LAPS · {weather === 'Random' ? 'WEATHER ?' : weather.toUpperCase()}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <SettingsBar laps={laps} weather={weather} canEdit={host} onClick={p.openSettings} />
+        <div style={{ ...mono, fontSize: 12, color: '#8A8A92' }}>DRIVERS {s.players.length}/{MAX_PLAYERS} · {GRID_SIZE - s.players.length} AI</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {slots.map((q, i) => {
@@ -192,7 +327,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
                 ) : (
                   <div style={{ fontWeight: 600, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{q.name}{isHost ? ' · HOST' : ''}</div>
                 )}
-                <div style={{ ...mono, fontSize: 11, color: '#8A8A92' }}>{t.name.toUpperCase()}{you && isHost ? ' · HOST' : ''}{!on ? ' · RECONNECTING' : ''}</div>
+                <div style={{ ...mono, fontSize: 11, color: '#8A8A92' }}>{t.name.toUpperCase()} · {liveryName(isLivery(q.livery) ? q.livery : 'classic').toUpperCase()}{you && isHost ? ' · HOST' : ''}{!on ? ' · RECONNECTING' : ''}</div>
               </div>
               <div style={{ ...mono, padding: '5px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: q.ready ? '#22C55E' : '#2A2A30', color: q.ready ? '#0E0E11' : '#A8A8B0' }}>{q.ready ? 'READY' : 'NOT READY'}</div>
             </div>

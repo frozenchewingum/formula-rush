@@ -159,6 +159,7 @@ function drawCar(ctx: CanvasRenderingContext2D, c: Car, heading: number, wx: num
   rect(1.15, 2.0, 0.72, 1.28, '#111'); rect(1.15, 2.0, -1.28, -0.72, '#111');
   rect(-2.05, -1.0, 0.72, 1.32, '#111'); rect(-2.05, -1.0, -1.32, -0.72, '#111');
   poly([[2.45, -0.22], [2.45, 0.22], [0.6, 0.42], [-0.9, 0.72], [-2.0, 0.6], [-2.0, -0.6], [-0.9, -0.72], [0.6, -0.42]], c.color, c.isPlayer ? '#FFFFFF' : null);
+  if (c.stripe) rect(-1.9, 2.4, -0.1, 0.1, c.stripe);
   rect(2.2, 2.65, -1.2, 1.2, c.dark);
   rect(-2.6, -2.15, -0.95, 0.95, '#151515');
   rect(-0.8, 0.15, -0.3, 0.3, '#0E0E11');
@@ -168,13 +169,13 @@ function drawCar(ctx: CanvasRenderingContext2D, c: Car, heading: number, wx: num
       ctx.font = '700 11px "JetBrains Mono", monospace';
       const w = ctx.measureText(c.name).width + 10, y = tp[1] - Math.max(18, F * 3.4 / tp[2]);
       ctx.fillStyle = 'rgba(14,14,17,.85)'; ctx.fillRect(tp[0] - w / 2, y - 14, w, 16);
-      ctx.fillStyle = c.color; ctx.fillRect(tp[0] - w / 2, y + 2, w, 2);
+      ctx.fillStyle = c.teamColor; ctx.fillRect(tp[0] - w / 2, y + 2, w, 2);
       ctx.fillStyle = '#F2F2F2'; ctx.textAlign = 'center'; ctx.fillText(c.name, tp[0], y - 2); ctx.textAlign = 'left';
     }
   }
   const hp = P(-0.25, 0);
   if (hp) {
     ctx.beginPath(); ctx.arc(hp[0], hp[1], Math.max(1, F * 0.26 / hp[2]), 0, Math.PI * 2);
-    ctx.fillStyle = c.isPlayer ? '#FFD400' : '#E8E8EA'; ctx.fill();
+    ctx.fillStyle = c.helmet; ctx.fill();
   }
 }

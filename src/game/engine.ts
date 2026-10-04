@@ -1,8 +1,8 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval,
-  type Settings, type Controls, DEFAULT_SETTINGS,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint,
+  type Settings, type Controls, type Livery, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
@@ -12,6 +12,7 @@ export type Phase = 'hold' | 'red' | 'green';
 
 export type Car = {
   name: string | null; userId: string | null; team: string; color: string; dark: string;
+  stripe: string | null; helmet: string; teamColor: string;
   isPlayer: boolean; remote: boolean; ai: boolean;
   p: number; d: number; dTarget: number; v: number; k: number; i: number;
   base: number; startDelay: number; think: number; yawOff: number; contactT: number;
@@ -33,7 +34,7 @@ export type UiState = {
   toast: Toast | null; hud: Hud; results: ResultRow[]; summary: Summary | null; showResults: boolean; showRace: boolean;
 };
 
-export type GridEntry = { team: number; userId?: string | null; name?: string | null; base: number };
+export type GridEntry = { team: number; userId?: string | null; name?: string | null; base: number; livery?: Livery; accent?: number };
 export type MpStart = {
   grid: GridEntry[]; laps: number; rainPlan: [number, number][];
   greenAt: number; lightsDelay: number; hostId: string;
@@ -72,6 +73,8 @@ export class Engine {
   settings: Settings = { ...DEFAULT_SETTINGS };
   controls: Controls = 'swipe';
   team = 0;
+  livery: Livery = 'classic';
+  accent = 0;
   screen: Screen = 'garage';
   ui: UiState;
   net: NetLink | null = null;
@@ -140,15 +143,19 @@ export class Engine {
       pool.splice(pool.indexOf(ti), 1);
       shuffle(pool);
       const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
-      grid = teams.map((t, i) => ({ team: t, userId: i === GRID_SLOT ? 'me' : null, base: i === GRID_SLOT ? VMAX : aiBase(i, pace) }));
+      grid = teams.map((t, i) => i === GRID_SLOT
+        ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
+        : { team: t, userId: null, base: aiBase(i, pace) });
     }
     const myId = mp && this.net ? this.net.myId : 'me';
     const host = !mp || !this.net || this.net.isHost();
     const cars: Car[] = grid.map((e, i) => {
       const me = e.userId === myId, human = !!e.userId, d = (i % 2 ? 1 : -1) * LANE, tm = TEAMS[e.team];
+      // Humans carry their livery; AI cars keep the plain team look.
+      const paint = human ? racePaint(e.team, e.livery, e.accent) : { color: tm.color, dark: tm.dark, stripe: null, helmet: '#E8E8EA' };
       return {
         name: human && !me ? (e.name || 'DRIVER') : null, userId: e.userId || null,
-        team: tm.name, color: tm.color, dark: tm.dark,
+        team: tm.name, teamColor: tm.color, ...paint,
         isPlayer: me, remote: !me && (human || !host), ai: !human,
         p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
         base: me ? VMAX : e.base, startDelay: me ? Infinity : 0.15 + Math.random() * 0.3,
@@ -501,7 +508,7 @@ export class Engine {
     const results: ResultRow[] = rows.map((r, i) => ({
       pos: i + 1,
       name: r.c.isPlayer ? 'YOU · ' + r.c.team : r.c.name ? r.c.name + ' · ' + r.c.team : r.c.team + ' (AI)',
-      color: r.c.color,
+      color: r.c.teamColor,
       gap: r.c.dnf ? 'DNF' : i === 0 ? fmt(r.time) : '+' + (r.time - lead).toFixed(3),
       you: r.c.isPlayer,
     }));
@@ -576,7 +583,7 @@ export function makeRainPlan(weather: Settings['weather'], laps: number, trackL:
  * Host builds the shared 22-car grid. Humans get random spots in a mid-pack window
  * (P7–P14 for up to 8 drivers, widening as the room grows); AI fills everything else.
  */
-export function buildMpGrid(players: { userId: string; name: string; team: number }[], aiPace: Settings['aiPace']): GridEntry[] {
+export function buildMpGrid(players: { userId: string; name: string; team: number; livery?: Livery; accent?: number }[], aiPace: Settings['aiPace']): GridEntry[] {
   const pace = PACE[aiPace] || 0.955;
   const humans = players.slice(0, GRID_SIZE);
   const pool: number[] = [];
@@ -587,7 +594,7 @@ export function buildMpGrid(players: { userId: string; name: string; team: numbe
   const first = clamp(Math.round(GRID_SIZE / 2) - Math.ceil(win / 2) - 1, 0, GRID_SIZE - win);
   const slots = shuffle(Array.from({ length: win }, (_, k) => first + k));
   const grid: (GridEntry | null)[] = new Array(GRID_SIZE).fill(null);
-  humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX }; });
+  humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX, livery: p.livery, accent: p.accent }; });
   let q = 0;
   return grid.map((e, i) => e || { team: pool[q++ % pool.length], userId: null, name: null, base: aiBase(i, pace) });
 }

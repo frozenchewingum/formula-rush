@@ -3,11 +3,11 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, ensureUser, estimateClockOffset, errText } from './supabase';
 import { buildMpGrid, makeRainPlan, type MpStart, type StateMsg, type FinishMsg, type NetLink } from '../game/engine';
-import { MIN_PLAYERS, type Settings, type Weather } from '../game/constants';
+import { MIN_PLAYERS, isLivery, type Settings, type Weather } from '../game/constants';
 import { TRACK_L } from '../game/trackInfo';
 
 export type RoomRow = { id: string; code: string; host_id: string; status: 'lobby' | 'racing' | 'closed'; laps: number; weather: Weather };
-export type PlayerRow = { room_id: string; user_id: string; slot: number; name: string; team: number; ready: boolean; joined_at: string };
+export type PlayerRow = { room_id: string; user_id: string; slot: number; name: string; team: number; livery?: string; accent?: number; ready: boolean; joined_at: string };
 
 type Handlers = {
   onChange: () => void;
@@ -148,12 +148,22 @@ export class RoomSession implements NetLink {
   }
 
   // ---------- lobby actions ----------
-  async updateMe(patch: Partial<Pick<PlayerRow, 'ready' | 'name' | 'team'>>) {
+  async updateMe(patch: Partial<Pick<PlayerRow, 'ready' | 'name' | 'team' | 'livery' | 'accent'>>) {
     if (!this.room) return;
     const me = this.me();
     if (me) Object.assign(me, patch);
     this.h.onChange();
     await supabase!.from('fr_room_players').update(patch).eq('room_id', this.room.id).eq('user_id', this.myId);
+  }
+
+  /** Host: push laps/weather to the room row; guests pick it up via postgres_changes. */
+  async setSettings(laps: number, weather: Weather) {
+    if (!this.room || !this.isHost() || this.room.status !== 'lobby') return;
+    if (this.room.laps === laps && this.room.weather === weather) return;
+    this.room = { ...this.room, laps, weather };
+    this.h.onChange();
+    const { error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: null, p_laps: laps, p_weather: weather });
+    if (error) console.warn('fr_set_room', errText(error));
   }
 
   canStart() {
@@ -166,7 +176,7 @@ export class RoomSession implements NetLink {
     const { data, error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: 'racing', p_laps: settings.laps, p_weather: settings.weather });
     if (error) throw new Error(errText(error));
     this.room = data as RoomRow;
-    const humans = this.players.map(p => ({ userId: p.user_id, name: p.name, team: p.team }));
+    const humans = this.players.map(p => ({ userId: p.user_id, name: p.name, team: p.team, livery: isLivery(p.livery) ? p.livery : undefined, accent: p.accent ?? 0 }));
     const lightsDelay = 700 + Math.random() * 1600;
     const msg: MpStart = {
       grid: buildMpGrid(humans, settings.aiPace),

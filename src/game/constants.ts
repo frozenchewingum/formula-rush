@@ -41,6 +41,43 @@ export type AiPace = 'Easy' | 'Normal' | 'Hard';
 export type Controls = 'swipe' | 'tilt';
 
 export type Settings = { cameraTilt: number; weather: Weather; aiPace: AiPace; laps: number };
+
+/** Race settings sheet options (v1.4). */
+export const LAP_OPTS: [number, string][] = [[1, 'SPRINT'], [3, 'SHORT'], [5, 'MEDIUM'], [8, 'LONG']];
+export const MAX_LAPS = 8;
+/** [value, label, description, dot colour] */
+export const WEATHER_OPTS: [Weather, string, string, string][] = [
+  ['Random', 'Random', 'Rain may arrive or clear at any point', '#F2F2F2'],
+  ['Dry', 'Dry', 'Full grip all race', '#FFD400'],
+  ['Rain', 'Wet', 'Rain from lights out · low grip', '#3B6CFF'],
+  ['Rain on final lap', 'Late rain', 'Dry, then rain on the final lap', '#00D2BE'],
+];
+export const weatherMeta = (w: Weather) => WEATHER_OPTS.find(o => o[0] === w) || WEATHER_OPTS[0];
+
+// ---------- Liveries (v1.2) ----------
+export type Livery = 'classic' | 'split' | 'stripe' | 'stealth';
+export const LIVERIES: [Livery, string][] = [['classic', 'Classic'], ['split', 'Split'], ['stripe', 'Stripe'], ['stealth', 'Stealth']];
+/** Accent always colours helmet, front-wing flap and DRS flap. */
+export const ACCENTS = ['#FFD400', '#F2F2F2', '#00D2BE', '#A855F7', '#FF8A00'];
+export const isLivery = (v: unknown): v is Livery => LIVERIES.some(l => l[0] === v);
+export const liveryName = (l: Livery) => (LIVERIES.find(x => x[0] === l) || LIVERIES[0])[1];
+
+/** 2D in-race paint: body, front wing, centre stripe, helmet. */
+export function racePaint(team: number, livery: Livery = 'classic', accent = 0) {
+  const t = TEAMS[team] || TEAMS[0], A = ACCENTS[accent] || ACCENTS[0];
+  switch (livery) {
+    case 'split': return { color: t.dark, dark: A, stripe: null, helmet: A };
+    case 'stripe': return { color: t.color, dark: A, stripe: A, helmet: A };
+    case 'stealth': return { color: '#1E1E22', dark: t.color, stripe: A, helmet: A };
+    default: return { color: t.color, dark: A, stripe: null, helmet: A };
+  }
+}
+
+/** Mini top-down car in the LIVERY tab: [body, sidepods, front wing, stripe]. */
+export function liveryTile(team: number, livery: Livery, accent: number) {
+  const t = TEAMS[team] || TEAMS[0], P = t.color, D = t.dark, A = ACCENTS[accent] || ACCENTS[0];
+  return ({ classic: [P, D, A, 'transparent'], split: [D, P, A, 'transparent'], stripe: [P, D, A, A], stealth: ['#2A2A30', '#2A2A30', P, A] } as Record<Livery, string[]>)[livery];
+}
 export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', aiPace: 'Normal', laps: 3 };
 
 export const PACE: Record<AiPace, number> = { Easy: 0.9, Normal: 0.955, Hard: 0.995 };
