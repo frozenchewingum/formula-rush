@@ -16,14 +16,14 @@ export type Car = {
   isPlayer: boolean; remote: boolean; ai: boolean;
   p: number; d: number; dTarget: number; v: number; k: number; i: number;
   base: number; startDelay: number; think: number; yawOff: number; contactT: number;
-  finished: boolean; finishTime: number; boostOn: boolean; drsOn: boolean; dnf: boolean;
+  finished: boolean; finishTime: number; boostOn: boolean; drsOn: boolean; brakeOn: boolean; dnf: boolean;
   snaps: Snap[];
 };
 type Snap = { t: number; p: number; d: number; v: number; y: number };
 
 export type Hud = {
   pos: number; lap: number; laps: number; time: string; best: string; boost: number; tyre: number;
-  kmh: number; drsReady: boolean; drsOn: boolean; boostOn: boolean; slip: boolean; rain: boolean; field: number;
+  kmh: number; drsReady: boolean; drsOn: boolean; boostOn: boolean; braking: boolean; slip: boolean; rain: boolean; field: number;
 };
 export type ResultRow = { pos: number; name: string; color: string; gap: string; you: boolean };
 export type Summary = { pos: number; gained: string; time: string; best: string; apex: string; contacts: string };
@@ -65,7 +65,7 @@ type Game = {
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
 };
 
-const emptyHud = (laps: number): Hud => ({ pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, boostOn: false, slip: false, rain: false, field: GRID_SIZE });
+const emptyHud = (laps: number): Hud => ({ pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, boostOn: false, braking: false, slip: false, rain: false, field: GRID_SIZE });
 
 export class Engine {
   T: Track = buildTrack();
@@ -83,6 +83,8 @@ export class Engine {
   onFinish: (f: FinishInfo) => void = () => {};
 
   keySteer = 0; dragSteer = 0; gyroSteer = 0;
+  /** Hold-to-brake: keyboard (↓ / S) and touch (press and hold without swiping). */
+  brakeKey = false; brakeTouch = false;
   private listeners = new Set<() => void>();
   private timers: number[] = [];
   private holdingFlag = false;
@@ -158,7 +160,7 @@ export class Engine {
         p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
         base: me ? VMAX : e.base, startDelay: me ? Infinity : 0.15 + Math.random() * 0.3,
         think: Math.random() * 2, yawOff: 0, contactT: 0, finished: false, finishTime: 0,
-        boostOn: false, drsOn: false, dnf: false, snaps: [],
+        boostOn: false, drsOn: false, brakeOn: false, dnf: false, snaps: [],
       };
     });
     const player = cars.find(c => c.isPlayer) || cars[GRID_SLOT];
@@ -173,7 +175,7 @@ export class Engine {
       jump: false, rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
-    this.keySteer = 0; this.dragSteer = 0;
+    this.keySteer = 0; this.dragSteer = 0; this.brakeKey = false; this.brakeTouch = false;
     this.lightsStarted = false;
     this.set({ hud: emptyHud(laps) });
   }
@@ -296,6 +298,14 @@ export class Engine {
     }
     return true;
   }
+  /** True if putting `c` on lane `d` would fill all three lanes side by side (a wall nobody can pass). */
+  private makesWall(c: Car, d: number) {
+    const lanes = new Set([Math.round(d / LANE)]);
+    for (const o of this.g.cars) {
+      if (o !== c && !o.finished && Math.abs(o.p - c.p) < 14) lanes.add(Math.round(o.dTarget / LANE));
+    }
+    return lanes.size >= 3;
+  }
   private nextApex(p: number) {
     const T = this.T;
     let s = p % T.L;
@@ -330,6 +340,10 @@ export class Engine {
         if (c.contactT > 0.5) mult *= 0.7;
       }
       let target = started ? Math.min(vmax, Math.sqrt(G / Math.max(T.ka[c.i], 1e-4))) * mult : 0;
+      if (c.isPlayer) {
+        c.brakeOn = started && !c.finished && (this.brakeKey || this.brakeTouch);
+        if (c.brakeOn) target = 0; // eases off at the normal 75/s braking rate
+      }
       if (c.finished) target = Math.min(target, 38);
       if (!c.isPlayer) {
         const ah = this.carAhead(c, 16, 2.3);
@@ -339,17 +353,19 @@ export class Engine {
             const li = Math.round(c.dTarget / L);
             for (const dl of (Math.random() < 0.5 ? [1, -1] : [-1, 1])) {
               const nl = li + dl;
-              if (nl >= -1 && nl <= 1 && this.laneFree(c, nl * L)) { c.dTarget = nl * L; moved = true; break; }
+              if (nl >= -1 && nl <= 1 && this.laneFree(c, nl * L) && !this.makesWall(c, nl * L)) { c.dTarget = nl * L; moved = true; break; }
             }
           }
           if (!moved || ah.gap < 6) target = Math.min(target, ah.car.v * (ah.gap < 6 ? 0.95 : 1));
         }
+        // Already part of a three-wide wall and not its leader: lift slightly so the wall breaks up.
+        if (this.makesWall(c, c.dTarget) && g.cars.some(o => o !== c && o.p > c.p && o.p - c.p < 14)) target *= 0.94;
         c.think -= dt;
         if (c.think <= 0) {
           c.think = 1.5 + Math.random() * 3;
           const ap = this.nextApex(c.p);
           const want = ap && Math.random() < g.skill ? ap.d : (Math.random() < 0.35 ? (Math.floor(Math.random() * 3) - 1) * L : c.dTarget);
-          if (this.laneFree(c, want)) c.dTarget = want;
+          if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
       }
       c.v += clamp(target - c.v, -75 * dt, (c.isPlayer ? 26 : 24) * dt);
@@ -548,7 +564,7 @@ export class Engine {
       hud: {
         pos, lap, laps: g.laps, time: fmt(pl.p > 0 && !pl.finished ? g.t - g.lapStart : 0), best: g.best ? fmt(g.best) : '—',
         boost: Math.round(g.boost), tyre: Math.round(g.tyre * 100), kmh: Math.round(pl.v * 4.1),
-        drsReady: g.drsReady, drsOn: g.drsOn, boostOn: g.boostT > 0, slip: g.slip && !g.drsOn, rain: this.isRain(), field: g.cars.length,
+        drsReady: g.drsReady, drsOn: g.drsOn, boostOn: g.boostT > 0, braking: pl.brakeOn, slip: g.slip && !g.drsOn, rain: this.isRain(), field: g.cars.length,
       },
     });
   }

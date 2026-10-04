@@ -399,13 +399,14 @@ export function RaceHud({ ui, tilt }: { ui: UiState; tilt: boolean }) {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {h.drsReady && <div style={{ ...chip, border: '1.5px solid #00D2BE', color: '#00D2BE' }}>DRS READY · ↑</div>}
             {h.drsOn && <div style={{ ...chip, background: '#00D2BE', color: '#0E0E11' }}>DRS OPEN</div>}
+            {h.braking && <div style={{ ...chip, background: '#E10600', color: '#F2F2F2' }}>BRAKE</div>}
             {h.slip && <div style={{ ...chip, background: '#1A1A1E', color: '#C8C8CE' }}>SLIPSTREAM</div>}
           </div>
           <div style={{ ...mono, fontSize: 28, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{h.kmh}<span style={{ fontSize: 12, color: '#8A8A92' }}> KM/H</span></div>
         </div>
         <Bar label="BOOST" w={h.boost} color={h.boost >= 35 ? '#FFD400' : '#7A6A1A'} tick />
         <Bar label="TYRES" w={h.tyre} color={h.tyre > 60 ? '#22C55E' : h.tyre > 45 ? '#FFD400' : '#E10600'} />
-        <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8A92' }}>{tilt ? 'drag or tilt to steer · tap right edge to boost' : '← swipe to change line → · swipe ↑ DRS / boost'}</div>
+        <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8A92' }}>{tilt ? 'tilt or drag to steer · tap right edge to boost · hold to brake' : '← → change line · ↑ DRS / boost · hold to brake'}</div>
       </div>
     </>
   );
