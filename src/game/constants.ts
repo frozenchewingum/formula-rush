@@ -22,7 +22,7 @@ export const MIN_PLAYERS = 2;
 export const LANE = 4.6;
 export const HALF = 7.5;
 export const VMAX = 78;
-export const GRID_SLOT = 7; // solo: player starts P8 of 12, mid-pack
+export const GRID_SLOT = GRID_SIZE - 1; // solo: player starts last, every AI car ahead
 export const TRACK_ID = 'circuit-1';
 
 /**
