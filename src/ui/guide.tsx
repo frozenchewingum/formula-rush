@@ -1,0 +1,116 @@
+import type { CSSProperties, ReactNode } from 'react';
+import { GRID_SIZE, MAX_PLAYERS } from '../game/constants';
+
+const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
+const display: CSSProperties = { fontFamily: "'Big Shoulders Display', sans-serif" };
+const media = (name: string) => `${import.meta.env?.BASE_URL ?? './'}guide/${name}.webp`;
+
+type Step = { title: string; img?: string; alt?: string; art?: ReactNode; body: ReactNode; keys?: string };
+
+const K = ({ children }: { children: ReactNode }) => (
+  <span style={{ ...mono, fontSize: 12, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#1A1A1E', color: '#F2F2F2', whiteSpace: 'nowrap' }}>{children}</span>
+);
+const Y = ({ c, children }: { c: string; children: ReactNode }) => <b style={{ color: c, fontWeight: 600 }}>{children}</b>;
+
+function RoomArt() {
+  return (
+    <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
+      <div style={{ ...mono, fontSize: 9, letterSpacing: '.2em', color: '#8A8A92' }}>ROOM CODE</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
+        {'KMVF'.split('').map(c => <div key={c} style={{ ...mono, fontWeight: 700, fontSize: 18, textAlign: 'center', padding: '6px 0', borderRadius: 6, background: '#1A1A1E', border: '1.5px solid #2A2A30' }}>{c}</div>)}
+      </div>
+      {[['#E10600', 'YOU', true], ['#00D2BE', 'ALEX', true], ['#E040A0', 'SAM', false]].map(([c, n, r]) => (
+        <div key={n as string} style={{ display: 'grid', gridTemplateColumns: '4px 1fr auto', gap: 6, alignItems: 'center', height: 26, borderRadius: 6, background: '#1A1A1E', overflow: 'hidden', paddingRight: 6 }}>
+          <div style={{ height: '100%', background: c as string }} />
+          <span style={{ fontSize: 11, fontWeight: 600 }}>{n as string}</span>
+          <span style={{ ...mono, fontSize: 8, fontWeight: 700, padding: '2px 4px', borderRadius: 3, background: r ? '#22C55E' : '#2A2A30', color: r ? '#0E0E11' : '#A8A8B0' }}>{r ? 'READY' : 'NOT READY'}</span>
+        </div>
+      ))}
+      <div style={{ height: 26, borderRadius: 6, border: '1.5px dashed #2A2A30', ...mono, fontSize: 9, color: '#5A5A62', display: 'flex', alignItems: 'center', paddingLeft: 10 }}>WAITING…</div>
+    </div>
+  );
+}
+
+function HazardArt() {
+  const row = (color: string, label: string, sub: string) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 10px', borderRadius: 8, background: '#1A1A1E' }}>
+      <span style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 17, color, lineHeight: 1 }}>{label}</span>
+      <span style={{ ...mono, fontSize: 9, color: '#8A8A92' }}>{sub}</span>
+    </div>
+  );
+  return (
+    <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
+      {row('#E10600', 'CONTACT −0.8s', 'cars & walls slow you')}
+      {row('#22C55E', 'TYRES', 'wear down every lap')}
+      {row('#3B6CFF', 'RAIN', 'less grip, shorter view')}
+    </div>
+  );
+}
+
+const STEPS: Step[] = [
+  {
+    title: 'Pick your car', img: 'garage', alt: 'The Garage: team colours, Swipe or Tilt, and the RACE button',
+    body: <>Choose a team colour and <Y c="#F2F2F2">Swipe</Y> or <Y c="#F2F2F2">Tilt</Y> controls. Tap <Y c="#E10600">RACE</Y> to take on {GRID_SIZE - 1} AI drivers.</>,
+  },
+  {
+    title: 'Nail the launch', img: 'launch', alt: 'Holding the screen through five red lights and letting go on green',
+    body: <>Press and <Y c="#FFD400">hold</Y> while the five red lights come on. Let go the instant they turn <Y c="#22C55E">green</Y>. Letting go early costs you a second.</>,
+    keys: 'Hold Space',
+  },
+  {
+    title: 'Change lines, hit apexes', img: 'lines', alt: 'Swiping right twice to reach a yellow apex ring',
+    body: <><Y c="#F2F2F2">Swipe left or right</Y> to move between three racing lines. Drive through the <Y c="#FFD400">yellow rings</Y> on the inside of corners to fill your boost. Inside lines are shorter too.</>,
+    keys: '← →',
+  },
+  {
+    title: 'Boost', img: 'boost', alt: 'Swiping up to fire boost, with speed lines on screen',
+    body: <><Y c="#F2F2F2">Swipe up</Y> to fire boost once the yellow bar passes the notch: 25% more speed for a moment. Line up the next apex to refill it.</>,
+    keys: '↑ or Space',
+  },
+  {
+    title: 'DRS on the straights', img: 'drs', alt: 'DRS READY appears behind a rival; swiping up opens DRS',
+    body: <>On the teal straights, get within a second of the car ahead and <Y c="#00D2BE">DRS READY</Y> lights up. Swipe up to open it and fly past.</>,
+    keys: '↑ or Space',
+  },
+  {
+    title: 'Keep it clean', art: <HazardArt />,
+    body: <>Hitting cars or the wall scrubs speed. Tyres wear as you race, and when it <Y c="#3B6CFF">rains</Y> you get less grip and see less of the road.</>,
+  },
+  {
+    title: 'Race your friends', art: <RoomArt />,
+    body: <>Tap <Y c="#F2F2F2">Create Room</Y> and share the 4-letter code. Up to {MAX_PLAYERS - 1} friends tap <Y c="#F2F2F2">Join Room</Y>. When everyone is ready, the host starts. AI fills the rest of the {GRID_SIZE}-car grid.</>,
+  },
+];
+
+export function Guide({ close }: { close: () => void }) {
+  return (
+    <div className="screen" role="dialog" aria-label="How to play" style={{ position: 'absolute', inset: 0, background: '#0E0E11', display: 'flex', flexDirection: 'column', zIndex: 6 }}>
+      <div style={{ padding: 'var(--pad-top) 24px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button type="button" className="back" onClick={close}>← GARAGE</button>
+        <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 52, lineHeight: 0.9 }}>HOW TO<br /><span style={{ color: '#E10600' }}>PLAY</span></div>
+      </div>
+      <ol style={{ listStyle: 'none', margin: 0, padding: '8px 24px 16px', overflowY: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {STEPS.map((s, i) => (
+          <li key={s.title} style={{ display: 'grid', gridTemplateColumns: '118px 1fr', gap: 14, alignItems: 'start' }}>
+            {s.img
+              ? <img src={media(s.img)} alt={s.alt} loading={i < 2 ? 'eager' : 'lazy'} width={300} height={538}
+                  style={{ width: '100%', height: 'auto', aspectRatio: s.img === 'launch' ? '320 / 410' : s.img === 'garage' ? '320 / 608' : '300 / 538', objectFit: 'cover', borderRadius: 12, background: '#141417', display: 'block' }} />
+              : s.art}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, paddingTop: 2 }}>
+              <div style={{ ...mono, fontSize: 11, letterSpacing: '.2em', color: '#8A8A92' }}>{String(i + 1).padStart(2, '0')}</div>
+              <div style={{ ...display, fontWeight: 800, fontSize: 24, lineHeight: 1, textWrap: 'balance' } as CSSProperties}>{s.title}</div>
+              <div style={{ fontSize: 15, lineHeight: 1.4, color: '#C8C8CE' }}>{s.body}</div>
+              {s.keys && <div style={{ fontSize: 12, color: '#8A8A92', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>Keyboard <K>{s.keys}</K></div>}
+            </div>
+          </li>
+        ))}
+        <li style={{ fontSize: 13, color: '#8A8A92', lineHeight: 1.5 }}>
+          Tilt mode: tilt or drag to steer, tap the right edge to boost. Press <K>M</K> to toggle music.
+        </li>
+      </ol>
+      <div style={{ padding: '12px 24px var(--pad-bottom)', borderTop: '1px solid #1A1A1E' }}>
+        <button type="button" className="btn primary" onClick={close} style={{ width: '100%', height: 56, ...display, fontWeight: 800, fontSize: 26, letterSpacing: '.04em' }}>GOT IT</button>
+      </div>
+    </div>
+  );
+}

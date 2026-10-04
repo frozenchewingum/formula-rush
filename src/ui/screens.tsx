@@ -19,14 +19,17 @@ function Btn({ onClick, style, children, disabled, className }: { onClick?: () =
 export function Garage(p: {
   team: number; setTeam: (t: number) => void; controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
-  openSettings: () => void; muted: boolean; toggleMusic: () => void; busy: string; err: string; pb: number | null; online: boolean;
+  openSettings: () => void; openGuide: () => void; muted: boolean; toggleMusic: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt';
   return (
     <div className="screen" style={{ ...full, padding: 'var(--pad-top) 24px var(--pad-bottom)', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: -16 }}>
         <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 60, lineHeight: 0.85 }}>FORMULA<br /><span style={{ color: '#E10600' }}>RUSH</span></div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, order: -1, alignSelf: 'flex-end' }}>
+        <button type="button" aria-label="How to play" title="How to play" className="icon-btn" onClick={p.openGuide}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
+        </button>
         <button type="button" aria-label={p.muted ? 'Turn music on' : 'Turn music off'} aria-pressed={!p.muted} title="Music (M)" className="icon-btn" onClick={p.toggleMusic}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 5 6 9H2v6h4l5 4V5z" />

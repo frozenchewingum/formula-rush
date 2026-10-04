@@ -5,6 +5,7 @@ import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
+import { Guide } from './ui/guide';
 import { Garage, SettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
 
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? { ...d, ...JSON.parse(v) } : d; } catch { return d; } };
@@ -12,6 +13,8 @@ const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(
 export default function App() {
   const engine = useMemo(() => new Engine(), []);
   const music = useMemo(() => new Music(), []);
+  // Debug hook used by the guide-capture script; VITE_FR_DEBUG is never set in production builds.
+  if (import.meta.env?.VITE_FR_DEBUG) (window as unknown as { __fr?: Engine }).__fr = engine;
   const [muted, setMuted] = useState(music.muted);
   const ui = useSyncExternalStore(engine.subscribe, engine.getUi);
   const [screen, setScreenState] = useState<Screen>('garage');
@@ -19,6 +22,8 @@ export default function App() {
   const [controls, setControls] = useState<Controls>(() => (localStorage.getItem('fr-controls') as Controls) || 'swipe');
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
   const [showSettings, setShowSettings] = useState(false);
+  const [showGuide, setShowGuide] = useState(() => { try { return !localStorage.getItem('fr-guide-seen') && !location.search.includes('room='); } catch { return false; } });
+  const closeGuide = () => { setShowGuide(false); try { localStorage.setItem('fr-guide-seen', '1'); } catch { /* storage blocked */ } };
   const [joinCode, setJoinCode] = useState('');
   const [joinErr, setJoinErr] = useState('');
   const [busy, setBusy] = useState('');
@@ -168,7 +173,7 @@ export default function App() {
     const kd = (e: KeyboardEvent) => {
       const s = screenRef.current, k = e.key;
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current) return startSolo();
+      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current) return startSolo();
       if (s === 'lights' && (k === ' ' || k === 'ArrowUp' || k === 'Enter')) { e.preventDefault(); if (!e.repeat) engine.throttleDown(); return; }
       if (s !== 'race') return;
       const tilt = engine.controls === 'tilt';
@@ -204,6 +209,8 @@ export default function App() {
 
   const showSettingsRef = useRef(false);
   showSettingsRef.current = showSettings;
+  const showGuideRef = useRef(false);
+  showGuideRef.current = showGuide;
 
   function startSolo() {
     const s = sessionRef.current;
@@ -229,8 +236,9 @@ export default function App() {
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
-            openSettings={() => setShowSettings(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            openSettings={() => setShowSettings(true)} openGuide={() => setShowGuide(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
+        {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {screen === 'garage' && showSettings && <SettingsSheet settings={settings} set={setSettings} close={() => setShowSettings(false)} />}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}
         {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} />}

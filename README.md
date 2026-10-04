@@ -4,6 +4,20 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 
 **Loop:** Garage → Lights Out (throttle launch) → Race → Results. Multiplayer: Create Room / Join Room (4-character code) → Lobby → synchronized start.
 
+## How to play
+
+| | |
+|---|---|
+| <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Choose a team colour and Swipe or Tilt controls, then tap **RACE** to take on 21 AI drivers. |
+| <img src="public/guide/launch.webp" width="160" alt="Launch"> | **2. Nail the launch.** Hold the screen (or Space) while the five red lights come on and let go the instant they turn green. Letting go early costs a second. |
+| <img src="public/guide/lines.webp" width="160" alt="Lines and apexes"> | **3. Change lines, hit apexes.** Swipe left/right between three lines. Drive through the yellow rings on the inside of corners to fill boost; inside lines are shorter. |
+| <img src="public/guide/boost.webp" width="160" alt="Boost"> | **4. Boost.** Swipe up (↑ / Space) once the bar passes the notch for 25% more speed. |
+| <img src="public/guide/drs.webp" width="160" alt="DRS"> | **5. DRS.** On the teal straights, get within a second of the car ahead and **DRS READY** appears. Swipe up to open it. |
+| | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
+| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 22-car grid. |
+
+The same guide opens in the game on first launch and from the **?** button in the Garage. Clips are real gameplay captured from the game.
+
 ## Stack
 
 - **Vite + React + TypeScript.** The game is drawn on one `<canvas>` (2D context, manual perspective projection); screens are React overlays.
