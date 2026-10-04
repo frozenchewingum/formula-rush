@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Engine, type Screen, type MpStart } from './game/engine';
-import { clamp, DEFAULT_SETTINGS, TEAMS, type Controls, type Settings } from './game/constants';
+import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, isLivery, type Controls, type Settings, type Livery } from './game/constants';
 import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
-import { Garage, SettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
+import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
 
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? { ...d, ...JSON.parse(v) } : d; } catch { return d; } };
 
@@ -19,9 +19,12 @@ export default function App() {
   const ui = useSyncExternalStore(engine.subscribe, engine.getUi);
   const [screen, setScreenState] = useState<Screen>('garage');
   const [team, setTeam] = useState(() => +(localStorage.getItem('fr-team') || 0) % TEAMS.length);
+  const [livery, setLivery] = useState<Livery>(() => { const v = localStorage.getItem('fr-livery'); return isLivery(v) ? v : 'classic'; });
+  const [accent, setAccent] = useState(() => +(localStorage.getItem('fr-accent') || 0) % ACCENTS.length);
   const [controls, setControls] = useState<Controls>(() => (localStorage.getItem('fr-controls') as Controls) || 'swipe');
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
   const [showSettings, setShowSettings] = useState(false);
+  const closeSettings = useCallback(() => setShowSettings(false), []);
   const [showGuide, setShowGuide] = useState(() => { try { return !localStorage.getItem('fr-guide-seen') && !location.search.includes('room='); } catch { return false; } });
   const closeGuide = () => { setShowGuide(false); try { localStorage.setItem('fr-guide-seen', '1'); } catch { /* storage blocked */ } };
   const [joinCode, setJoinCode] = useState('');
@@ -50,6 +53,8 @@ export default function App() {
   }, [engine]);
 
   useEffect(() => { engine.team = team; localStorage.setItem('fr-team', String(team)); }, [engine, team]);
+  useEffect(() => { engine.livery = livery; localStorage.setItem('fr-livery', livery); }, [engine, livery]);
+  useEffect(() => { engine.accent = accent; localStorage.setItem('fr-accent', String(accent)); }, [engine, accent]);
   useEffect(() => { engine.controls = controls; localStorage.setItem('fr-controls', controls); }, [engine, controls]);
   useEffect(() => { engine.settings = settings; localStorage.setItem('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
@@ -105,6 +110,7 @@ export default function App() {
   const enterRoom = (s: RoomSession) => {
     localStorage.setItem('fr-name', s.me()?.name || name());
     sessionRef.current = s; engine.net = s;
+    s.updateMe({ livery, accent });
     engine.resetRace(); setScreen('lobby');
     if (location.search) history.replaceState(null, '', location.pathname);
   };
@@ -226,6 +232,22 @@ export default function App() {
 
   const session = sessionRef.current;
   const mp = !!engine.mp;
+  const amHost = !!session?.isHost();
+
+  // Host's laps/weather are the room's settings (v1.4): push every change to the room.
+  // A guest promoted to host keeps the room's current settings instead of overwriting them.
+  const wasHostRef = useRef(amHost);
+  useEffect(() => {
+    const promoted = amHost && !wasHostRef.current && !!session?.room;
+    wasHostRef.current = amHost;
+    if (promoted && session?.room) { setSettings(st => ({ ...st, laps: session.room!.laps, weather: session.room!.weather })); return; }
+    if (screen === 'lobby' && amHost) session?.setSettings(settings.laps, settings.weather);
+  }, [screen, session, amHost, settings.laps, settings.weather]);
+
+  const openSettings = () => {
+    if (screen === 'lobby' && session && !session.isHost()) { engine.toast('SET BY HOST', '#8A8A92'); return; }
+    setShowSettings(true);
+  };
 
   return (
     <div className="page">
@@ -234,14 +256,16 @@ export default function App() {
         {screen === 'race' && <RaceHud ui={ui} tilt={controls === 'tilt'} />}
         {screen === 'lights' && <Lights ui={ui} />}
         {screen === 'garage' && (
-          <Garage team={team} setTeam={setTeam} controls={controls} setControls={pickControls} settings={settings}
+          <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
-            openSettings={() => setShowSettings(true)} openGuide={() => setShowGuide(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            openSettings={openSettings} openGuide={() => setShowGuide(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
-        {screen === 'garage' && showSettings && <SettingsSheet settings={settings} set={setSettings} close={() => setShowSettings(false)} />}
+        {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (
+          <RaceSettingsSheet settings={settings} set={setSettings} close={closeSettings} mode={screen === 'lobby' ? 'ROOM · HOST ONLY' : 'SOLO RACE'} />
+        )}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}
-        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} />}
+        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} />}
         {screen === 'results' && (
           <Results ui={ui} mp={mp && !!session}
             toGarage={() => { if (mp && session) leaveRoom(); else { engine.resetRace(); setScreen('garage'); } }}
