@@ -3,7 +3,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, ensureUser, estimateClockOffset, errText } from './supabase';
 import { buildMpGrid, makeRainPlan, type MpStart, type StateMsg, type FinishMsg, type NetLink } from '../game/engine';
-import type { Settings, Weather } from '../game/constants';
+import { MIN_PLAYERS, type Settings, type Weather } from '../game/constants';
 import { TRACK_L } from '../game/trackInfo';
 
 export type RoomRow = { id: string; code: string; host_id: string; status: 'lobby' | 'racing' | 'closed'; laps: number; weather: Weather };
@@ -157,7 +157,7 @@ export class RoomSession implements NetLink {
   }
 
   canStart() {
-    return this.isHost() && this.players.length >= 2 && this.players.every(p => p.ready);
+    return this.isHost() && this.players.length >= MIN_PLAYERS && this.players.every(p => p.ready);
   }
 
   /** Host: lock the room, build the shared grid + weather, and schedule a common green light. */

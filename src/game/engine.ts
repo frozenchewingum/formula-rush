@@ -1,7 +1,7 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, PACE, clamp, fmt, buzz,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval,
   type Settings, type Controls, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
@@ -64,7 +64,7 @@ type Game = {
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
 };
 
-const emptyHud = (laps: number): Hud => ({ pos: 7, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, slip: false, rain: false, field: 10 });
+const emptyHud = (laps: number): Hud => ({ pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, slip: false, rain: false, field: GRID_SIZE });
 
 export class Engine {
   T: Track = buildTrack();
@@ -86,6 +86,7 @@ export class Engine {
   private toastTimer = 0;
   private toastSeq = 0;
   private sendT = 0;
+  private netInterval = 0.1;
   private lightsStarted = false;
   private canvas: HTMLCanvasElement | null = null;
   private raf = 0;
@@ -135,7 +136,7 @@ export class Engine {
     if (mp) grid = mp.grid;
     else {
       const ti = this.team, pool: number[] = [];
-      for (let t = 0; t < 5; t++) for (let j = 0; j < 2; j++) pool.push(t);
+      for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
       pool.splice(pool.indexOf(ti), 1);
       shuffle(pool);
       const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
@@ -157,6 +158,8 @@ export class Engine {
     });
     const player = cars.find(c => c.isPlayer) || cars[GRID_SLOT];
     player.isPlayer = true;
+    this.netInterval = sendInterval(grid.filter(e => e.userId).length);
+    this.sendT = -1;
     const rainPlan = mp ? mp.rainPlan : makeRainPlan(this.settings.weather, laps, T.L);
     this.g = {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, tyre: 1, drsOn: false, drsReady: false, slip: false,
@@ -365,28 +368,37 @@ export class Engine {
     if (this.mp && this.net) this.broadcast();
   }
 
+  /**
+   * Remote cars: interpolate ~100 ms behind when updates are frequent; when the room is big and
+   * updates are sparse, keep driving them along the track at their last speed and steer the
+   * error away smoothly so nothing teleports.
+   */
   private stepRemote(c: Car, dt: number) {
     const s = c.snaps;
     if (!s.length) return;
     const rt = this.g.t - 0.1;
     let a = s[0], b: Snap | null = null;
     for (let n = 0; n < s.length; n++) { if (s[n].t <= rt) a = s[n]; else { b = s[n]; break; } }
-    const prevD = c.d;
+    let tp: number, td: number, tv: number, ty: number;
     if (b && b.t > a.t && a.t <= rt) {
       const r = (rt - a.t) / (b.t - a.t);
-      c.p = a.p + (b.p - a.p) * r; c.d = a.d + (b.d - a.d) * r; c.v = a.v + (b.v - a.v) * r; c.yawOff = a.y + (b.y - a.y) * r;
+      tp = a.p + (b.p - a.p) * r; td = a.d + (b.d - a.d) * r; tv = a.v + (b.v - a.v) * r; ty = a.y + (b.y - a.y) * r;
     } else {
-      const last = s[s.length - 1], ex = clamp(rt - last.t, 0, 0.5);
-      c.p = last.p + last.v * ex; c.d = last.d; c.v = last.v; c.yawOff = last.y;
+      const last = s[s.length - 1], ex = clamp(this.g.t - last.t, 0, this.netInterval * 1.5 + 0.5);
+      tp = last.p + last.v * ex; td = last.d; tv = last.v; ty = last.y;
     }
+    const err = tp - c.p;
+    if (Math.abs(err) > 40) c.p = tp;
+    else c.p += tv * dt + err * Math.min(1, dt * 6);
+    c.d += (td - c.d) * Math.min(1, dt * 8);
+    c.v = tv; c.yawOff += (ty - c.yawOff) * Math.min(1, dt * 8);
     c.dTarget = c.d;
-    if (dt > 0 && prevD === c.d) c.yawOff *= 0.9;
     while (s.length > 2 && s[1].t < rt - 0.5) s.shift();
   }
 
   private broadcast() {
     const g = this.g, net = this.net!, pl = g.player;
-    if (g.t - this.sendT < 0.1) return;
+    if (g.t - this.sendT < this.netInterval) return;
     this.sendT = g.t;
     const m: StateMsg = { id: net.myId, t: g.t, p: pl.p, d: pl.d, v: pl.v, y: pl.yawOff, b: g.boostT > 0, r: g.drsOn };
     if (net.isHost()) {
@@ -544,7 +556,7 @@ export function shuffle<T>(a: T[]) {
   return a;
 }
 export function aiBase(i: number, pace: number) {
-  return VMAX * pace * (1.01 - i * 0.005 + (Math.random() - 0.5) * 0.02);
+  return VMAX * pace * (1.01 - i * (0.05 / GRID_SIZE) + (Math.random() - 0.5) * 0.02);
 }
 
 /** Weather plan in track-progress units: list of [fromP, toP) ranges where it rains. */
@@ -560,16 +572,22 @@ export function makeRainPlan(weather: Settings['weather'], laps: number, trackL:
   return [[s, Math.random() < 0.5 ? 1e9 : s + L * (0.2 + Math.random() * 0.3)]];
 }
 
-/** Host builds the shared grid: humans random among slots 4..7 (P5–P8), AI elsewhere. */
+/**
+ * Host builds the shared 22-car grid. Humans get random spots in a mid-pack window
+ * (P7–P14 for up to 8 drivers, widening as the room grows); AI fills everything else.
+ */
 export function buildMpGrid(players: { userId: string; name: string; team: number }[], aiPace: Settings['aiPace']): GridEntry[] {
   const pace = PACE[aiPace] || 0.955;
+  const humans = players.slice(0, GRID_SIZE);
   const pool: number[] = [];
-  for (let t = 0; t < 5; t++) for (let j = 0; j < 2; j++) pool.push(t);
-  for (const p of players) { const k = pool.indexOf(p.team); if (k >= 0) pool.splice(k, 1); }
+  for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
+  for (const p of humans) { const k = pool.indexOf(p.team); if (k >= 0) pool.splice(k, 1); }
   shuffle(pool);
-  const slots = shuffle([4, 5, 6, 7]);
-  const grid: (GridEntry | null)[] = new Array(10).fill(null);
-  players.slice(0, 4).forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX }; });
+  const win = Math.max(8, humans.length);
+  const first = clamp(Math.round(GRID_SIZE / 2) - Math.ceil(win / 2) - 1, 0, GRID_SIZE - win);
+  const slots = shuffle(Array.from({ length: win }, (_, k) => first + k));
+  const grid: (GridEntry | null)[] = new Array(GRID_SIZE).fill(null);
+  humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX }; });
   let q = 0;
   return grid.map((e, i) => e || { team: pool[q++ % pool.length], userId: null, name: null, base: aiBase(i, pace) });
 }

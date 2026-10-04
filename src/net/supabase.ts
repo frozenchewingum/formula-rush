@@ -44,10 +44,12 @@ export async function estimateClockOffset(samples = 5): Promise<number> {
   return best.off;
 }
 
-/** Postgres raises our room errors as messages like 'ROOM FULL (4/4)'. */
+/** Postgres raises our room errors as messages like 'ROOM FULL (22/22)'. */
 export function errText(e: unknown): string {
   const m = (e as { message?: string })?.message || String(e);
-  for (const k of ['ROOM NOT FOUND', 'ROOM FULL (4/4)', 'RACE IN PROGRESS', 'NOT HOST', 'NO FREE CODE']) if (m.includes(k)) return k;
+  const full = m.match(/ROOM FULL \(\d+\/\d+\)/);
+  if (full) return full[0];
+  for (const k of ['ROOM NOT FOUND', 'RACE IN PROGRESS', 'NOT HOST', 'NO FREE CODE']) if (m.includes(k)) return k;
   if (/anonymous/i.test(m)) return 'ENABLE ANONYMOUS SIGN-INS IN SUPABASE';
   if (/fetch|network/i.test(m)) return 'NETWORK ERROR';
   return m.toUpperCase().slice(0, 60);

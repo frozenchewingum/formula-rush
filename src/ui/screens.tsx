@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { TEAMS, CODE_ABC, type Controls, type Settings, type Weather, type AiPace, fmt } from '../game/constants';
+import { TEAMS, CODE_ABC, GRID_SIZE, GRID_SLOT, MAX_PLAYERS, MIN_PLAYERS, type Controls, type Settings, type Weather, type AiPace, fmt } from '../game/constants';
 import type { UiState } from '../game/engine';
 import type { PlayerRow, RoomSession } from '../net/room';
 
@@ -37,10 +37,10 @@ export function Garage(p: {
           <div style={{ position: 'absolute', top: 58, left: 20, width: 24, height: 30, borderRadius: 12, background: '#111' }} />
         </div>
         <div style={{ ...mono, position: 'absolute', bottom: 14, left: 16, fontSize: 12, color: '#8A8A92' }}>{tm.name.toUpperCase()} RACING · #07</div>
-        <div style={{ ...mono, position: 'absolute', bottom: 14, right: 16, fontSize: 12, color: '#8A8A92' }}>{p.settings.laps} LAPS · START P7</div>
+        <div style={{ ...mono, position: 'absolute', bottom: 14, right: 16, fontSize: 12, color: '#8A8A92' }}>{p.settings.laps} LAPS · START P{GRID_SLOT + 1}/{GRID_SIZE}</div>
         {p.pb != null && <div style={{ ...mono, position: 'absolute', top: 14, right: 16, fontSize: 12, color: '#A855F7' }}>PB {fmt(p.pb)}</div>}
       </div>
-      <div style={{ display: 'flex', gap: 10 }} role="radiogroup" aria-label="Team">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }} role="radiogroup" aria-label="Team">
         {TEAMS.map((t, i) => (
           <button type="button" key={t.name} aria-label={t.name} aria-checked={i === p.team} role="radio" onClick={() => p.setTeam(i)}
             style={{ width: 40, height: 40, borderRadius: '50%', border: 0, padding: 0, background: t.color, outline: i === p.team ? '2px solid #fff' : '2px solid transparent', outlineOffset: 3, cursor: 'pointer' }} />
@@ -133,7 +133,8 @@ export function Join(p: { code: string; setCode: (c: string) => void; err: strin
 // ---------------- Lobby ----------------
 export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean }) {
   const { s } = p, room = s.room!, me = s.me(), host = s.isHost();
-  const slots: (PlayerRow | null)[] = [0, 1, 2, 3].map(i => s.players.find(q => q.slot === i) || null);
+  const slots: (PlayerRow | null)[] = [...s.players].sort((a, b) => a.slot - b.slot);
+  if (s.players.length < MAX_PLAYERS) slots.push(null);
   const laps = host ? p.settings.laps : room.laps, weather = host ? p.settings.weather : room.weather;
   const can = s.canStart() && !p.starting;
   const racing = room.status === 'racing';
@@ -155,13 +156,13 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
         <button type="button" className="outline" onClick={share}>{shared ? 'Copied' : 'Share'}</button>
       </div>
       <div style={{ ...mono, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8A8A92' }}>
-        <span>DRIVERS {s.players.length}/4</span>
+        <span>DRIVERS {s.players.length}/{MAX_PLAYERS} · {GRID_SIZE - s.players.length} AI</span>
         <span>{laps} LAPS · {weather === 'Random' ? 'WEATHER ?' : weather.toUpperCase()}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {slots.map((q, i) => {
           if (!q) return (
-            <div key={i} style={{ height: 60, borderRadius: 10, border: '1.5px dashed #2A2A30', display: 'grid', gridTemplateColumns: '6px 1fr auto', gap: 12, alignItems: 'center', padding: '0 14px 0 0', boxSizing: 'border-box' }}>
+            <div key={'open' + i} style={{ height: 60, flexShrink: 0, borderRadius: 10, border: '1.5px dashed #2A2A30', display: 'grid', gridTemplateColumns: '6px 1fr auto', gap: 12, alignItems: 'center', padding: '0 14px 0 0', boxSizing: 'border-box' }}>
               <div />
               <div><div style={{ fontWeight: 600, fontSize: 16, color: '#5A5A62' }}>WAITING…</div><div style={{ ...mono, fontSize: 11, color: '#8A8A92' }}>Share the code</div></div>
               <div style={{ ...mono, padding: '5px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700, color: '#5A5A62' }}>OPEN</div>
@@ -169,7 +170,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
           );
           const t = TEAMS[q.team], you = q.user_id === s.myId, isHost = q.user_id === room.host_id, on = s.online.has(q.user_id) || you;
           return (
-            <div key={q.user_id} style={{ height: 60, borderRadius: 10, background: you ? '#1E1416' : '#151518', border: `1.5px solid ${you ? '#3A2224' : '#151518'}`, display: 'grid', gridTemplateColumns: '6px 1fr auto', gap: 12, alignItems: 'center', padding: '0 14px 0 0', overflow: 'hidden', boxSizing: 'border-box', opacity: on ? 1 : 0.5 }}>
+            <div key={q.user_id} style={{ height: 60, flexShrink: 0, borderRadius: 10, background: you ? '#1E1416' : '#151518', border: `1.5px solid ${you ? '#3A2224' : '#151518'}`, display: 'grid', gridTemplateColumns: '6px 1fr auto', gap: 12, alignItems: 'center', padding: '0 14px 0 0', overflow: 'hidden', boxSizing: 'border-box', opacity: on ? 1 : 0.5 }}>
               <div style={{ height: '100%', background: t.color }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                 {you ? (
@@ -187,12 +188,11 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
           );
         })}
       </div>
-      <div style={{ fontSize: 14, color: '#8A8A92' }}>Empty grid slots are filled with AI. You start P5–P8.</div>
-      <div style={{ flex: 1 }} />
+      <div style={{ fontSize: 14, color: '#8A8A92' }}>{GRID_SIZE}-car grid. AI fills the empty spots and drivers start mid-pack. {MIN_PLAYERS}+ drivers to race.</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
         <Btn onClick={() => me && s.updateMe({ ready: !me.ready })} disabled={racing} style={{ height: 60, background: me?.ready ? '#22C55E' : '#1A1A1E', color: me?.ready ? '#0E0E11' : '#F2F2F2' }}>{me?.ready ? 'Ready ✓' : 'Ready up'}</Btn>
         <Btn onClick={() => can && p.start()} disabled={!can} style={{ height: 60, background: can ? '#E10600' : '#1A1A1E', color: can ? '#F2F2F2' : '#5A5A62', ...display, fontWeight: 800, fontSize: 24, letterSpacing: '.04em', lineHeight: 1 }}>
-          {racing ? 'RACE IN PROGRESS' : host ? (p.starting ? 'STARTING…' : can ? 'START RACE' : s.players.length < 2 ? 'NEED 2+ DRIVERS' : 'WAITING FOR READY') : 'HOST STARTS'}
+          {racing ? 'RACE IN PROGRESS' : host ? (p.starting ? 'STARTING…' : can ? 'START RACE' : s.players.length < MIN_PLAYERS ? `NEED ${MIN_PLAYERS}+ DRIVERS` : 'WAITING FOR READY') : 'HOST STARTS'}
         </Btn>
       </div>
     </div>

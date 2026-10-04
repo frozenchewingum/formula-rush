@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Engine, type Screen, type MpStart } from './game/engine';
-import { clamp, DEFAULT_SETTINGS, type Controls, type Settings } from './game/constants';
+import { clamp, DEFAULT_SETTINGS, TEAMS, type Controls, type Settings } from './game/constants';
 import { RoomSession } from './net/room';
 import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
@@ -12,7 +12,7 @@ export default function App() {
   const engine = useMemo(() => new Engine(), []);
   const ui = useSyncExternalStore(engine.subscribe, engine.getUi);
   const [screen, setScreenState] = useState<Screen>('garage');
-  const [team, setTeam] = useState(() => +(localStorage.getItem('fr-team') || 0) % 5);
+  const [team, setTeam] = useState(() => +(localStorage.getItem('fr-team') || 0) % TEAMS.length);
   const [controls, setControls] = useState<Controls>(() => (localStorage.getItem('fr-controls') as Controls) || 'swipe');
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
   const [showSettings, setShowSettings] = useState(false);
