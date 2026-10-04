@@ -321,7 +321,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                 {you ? (
                   <input aria-label="Your driver name" defaultValue={q.name} maxLength={12}
-                    onBlur={e => { const v = cleanName(e.target.value); if (v !== q.name) { localStorage.setItem('fr-name', v); s.updateMe({ name: v }); } }}
+                    onBlur={e => { const v = cleanName(e.target.value); if (v !== q.name) { try { localStorage.setItem('fr-name', v); } catch { /* storage blocked */ } s.updateMe({ name: v }); } }}
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     style={{ background: 'transparent', border: 0, borderBottom: '1px dashed #3A3A42', color: '#F2F2F2', fontWeight: 600, fontSize: 16, fontFamily: 'Barlow, sans-serif', padding: 0, width: '100%', outline: 'none', textTransform: 'uppercase' }} />
                 ) : (

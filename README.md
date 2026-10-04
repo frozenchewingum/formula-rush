@@ -99,7 +99,7 @@ Room invites use `?room=CODE` deep links; `404.html` is a copy of the app so lin
 
 ## Soundtrack
 
-`src/audio/music.ts` is an original score synthesized live with Web Audio, so there are no audio files and nothing to license. It's in D minor at 120 BPM, built from a pulsing 16th-note ostinato, a pedal bass, low brass swells and drums. Layers follow the race: a calm pad in the Garage, a heartbeat and ticking that build with each red light, a hit on lights-out, the full groove while racing (brighter on boost/DRS, darker in rain), and extra percussion and a high line on the final lap.
+`src/audio/music.ts` is an original score synthesized live with Web Audio, so there are no audio files and nothing to license. There are four sister tracks: **Lights Out** (D minor, 120 BPM), **Slipstream** (E minor, 128), **Apex Hunter** (A minor, 124) and **Night Race** (C minor, 116). They share the same sound (a pulsing 16th-note ostinato, a pedal bass, low brass swells and drums) and differ in key, tempo, chord progression and arpeggio pattern. A random track plays in the Garage and each race moves to the next one. Layers follow the race: a calm pad in the Garage, a heartbeat and ticking that build with each red light, a hit on lights-out, the full groove while racing (brighter on boost/DRS, darker in rain), and extra percussion and a high line on the final lap.
 
 Audio starts on the first tap or key press (a browser rule). Toggle it with the speaker button in the Garage or the **M** key; the choice is remembered.
 
