@@ -1,6 +1,6 @@
 # Formula Rush
 
-Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 22-car grid (11 teams × 2, like the 2026 F1 grid), and 2–22 human drivers per room over Supabase Realtime; AI fills the empty grid spots.
+Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 22-car grid (11 teams × 2, like the 2026 F1 grid), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
 **Loop:** Garage → Lights Out (throttle launch) → Race → Results. Multiplayer: Create Room / Join Room (4-character code) → Lobby → synchronized start.
 
@@ -40,7 +40,7 @@ Supabase settings come from `.env.development` / `.env.production` (`VITE_SUPABA
 | Table | Purpose |
 |---|---|
 | `fr_rooms` | code (unique while `lobby`/`racing`), host, status, laps, weather |
-| `fr_room_players` | up to 22 per room, `slot` 0–21 unique per room, team (0–10), name, ready |
+| `fr_room_players` | up to 4 per room, `slot` unique per room, team (0–10), name, ready |
 | `fr_race_results` | one row per driver per finished race |
 | `fr_best_laps` | personal best per track (leaderboard, future ghosts) |
 | `fr_profiles` | reserved for named profiles |
@@ -48,7 +48,7 @@ Supabase settings come from `.env.development` / `.env.production` (`VITE_SUPABA
 RLS: signed-in users read everything and write only their own rows. Room membership changes only through security-definer functions, which enforce the rules server-side:
 
 - `fr_create_room(name, team, laps, weather)` picks a free code from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`.
-- `fr_join_room(code, name, team)` locks the room row and raises `ROOM NOT FOUND`, `ROOM FULL (22/22)` or `RACE IN PROGRESS`.
+- `fr_join_room(code, name, team)` locks the room row and raises `ROOM NOT FOUND`, `ROOM FULL (4/4)` or `RACE IN PROGRESS`.
 - `fr_leave_room`, `fr_kick_player` (host drops a vanished player), `fr_claim_host` (oldest player takes over from a vanished host), `fr_set_room` (host: status/laps/weather), `fr_submit_best_lap` (keeps only improvements, rejects laps under 15 s), `fr_now` (server clock for sync).
 
 ## Multiplayer
@@ -56,24 +56,15 @@ RLS: signed-in users read everything and write only their own rows. Room members
 Client-authoritative for your own car, Supabase Realtime as the relay. Channel `race:{roomId}`:
 
 - **Presence** `{ userId }` shows who is connected. If a player is gone for 8 s the host removes them; if the host is gone, the oldest player claims host.
-- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start in random mid-pack spots (P7–P14 for up to 8 drivers, wider for bigger rooms); AI takes every other spot on the 22-car grid. The host needs at least 2 ready drivers to start.
+- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start in random mid-pack spots (P7–P14); AI takes the other 18–20 spots on the 22-car grid. The host needs at least 2 ready drivers to start.
 - **`state`**: `{ id, t, p, d, v, y, b, r }` in race time. The send rate adapts to room size so the whole room stays inside the Realtime quota: every update is delivered to every other driver, so a room of n drivers costs n·(n−1)·rate messages/second. Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. The host also sends AI cars and their finish times; if the host leaves mid-race the new host takes over the AI.
 - **`finish`**: `{ id, finishTime, best }`. Results update live as drivers cross the line.
 
 Contacts are resolved by each client for its own car only.
 
-### Realtime quota and room size
+### Realtime quota
 
-`VITE_RT_MSGS_PER_SEC` (default 80) is the message budget the game plans around. Supabase limits Realtime to 100 msg/s on Free, 500 on Pro and 2,500 on Team.
-
-| Drivers | Free (80) | Pro (set 450) | Team (set 2,000) |
-|---|---|---|---|
-| 2 | 10 Hz | 10 Hz | 10 Hz |
-| 4 | ~7 Hz | 10 Hz | 10 Hz |
-| 8 | ~1.4 Hz | ~8 Hz | 10 Hz |
-| 22 | one update / ~6 s | ~2 Hz | ~4 Hz |
-
-Racing is smooth up to ~6 drivers on Free. Bigger rooms work, but rivals' positions are approximate until the plan is raised; then set `VITE_RT_MSGS_PER_SEC` as a GitHub repository variable.
+A room of n drivers costs n·(n−1)·rate Realtime messages/second, since every update reaches every other driver. The rate adapts to stay under `VITE_RT_MSGS_PER_SEC` (default 80; Supabase Free allows 100/s): 10 Hz for 2–3 drivers, ~7 Hz for 4. The host's AI cars ride along in the host's own updates, so the 18–20 AI cars cost nothing extra.
 
 ## Deploy
 

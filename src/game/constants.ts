@@ -16,7 +16,7 @@ export const TEAMS: Team[] = [
 ];
 
 export const GRID_SIZE = TEAMS.length * 2; // 22
-export const MAX_PLAYERS = GRID_SIZE; // humans per room; AI fills the rest
+export const MAX_PLAYERS = 4; // humans per room; AI fills the rest of the 22-car grid
 export const MIN_PLAYERS = 2;
 
 export const LANE = 4.6;
