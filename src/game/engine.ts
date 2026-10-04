@@ -580,8 +580,8 @@ export function makeRainPlan(weather: Settings['weather'], laps: number, trackL:
 }
 
 /**
- * Host builds the shared grid. Humans get random spots in a mid-pack window
- * (P4–P9 on the 12-car grid); AI fills everything else.
+ * Host builds the shared grid. Humans start at the back of the pack in random order
+ * (P9–P12 for 4 drivers); AI fills everything ahead.
  */
 export function buildMpGrid(players: { userId: string; name: string; team: number; livery?: Livery; accent?: number }[], aiPace: Settings['aiPace']): GridEntry[] {
   const pace = PACE[aiPace] || 0.955;
@@ -590,9 +590,7 @@ export function buildMpGrid(players: { userId: string; name: string; team: numbe
   for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
   for (const p of humans) { const k = pool.indexOf(p.team); if (k >= 0) pool.splice(k, 1); }
   shuffle(pool);
-  const win = Math.max(Math.ceil(GRID_SIZE / 2), humans.length);
-  const first = clamp(Math.round((GRID_SIZE - win) / 2), 0, GRID_SIZE - win);
-  const slots = shuffle(Array.from({ length: win }, (_, k) => first + k));
+  const slots = shuffle(humans.map((_, k) => GRID_SIZE - 1 - k));
   const grid: (GridEntry | null)[] = new Array(GRID_SIZE).fill(null);
   humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX, livery: p.livery, accent: p.accent }; });
   let q = 0;

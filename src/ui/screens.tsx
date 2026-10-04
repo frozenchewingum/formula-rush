@@ -334,7 +334,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
           );
         })}
       </div>
-      <div style={{ fontSize: 14, color: '#8A8A92' }}>{GRID_SIZE}-car grid. AI fills the empty spots and drivers start mid-pack. {MIN_PLAYERS}+ drivers to race.</div>
+      <div style={{ fontSize: 14, color: '#8A8A92' }}>{GRID_SIZE}-car grid. AI fills the empty spots and drivers start at the back. {MIN_PLAYERS}+ drivers to race.</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
         <Btn onClick={() => me && s.updateMe({ ready: !me.ready })} disabled={racing} style={{ height: 60, background: me?.ready ? '#22C55E' : '#1A1A1E', color: me?.ready ? '#0E0E11' : '#F2F2F2' }}>{me?.ready ? 'Ready ✓' : 'Ready up'}</Btn>
         <Btn onClick={() => can && p.start()} disabled={!can} style={{ height: 60, background: can ? '#E10600' : '#1A1A1E', color: can ? '#F2F2F2' : '#5A5A62', ...display, fontWeight: 800, fontSize: 24, letterSpacing: '.04em', lineHeight: 1 }}>
