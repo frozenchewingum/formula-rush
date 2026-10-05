@@ -30,6 +30,8 @@ export function Garage(p: {
   controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
   openSettings: () => void; openGuide: () => void; accel: string; secret: () => void; sound: SoundState; armSound: () => void; toggleSound: () => void; busy: string; err: string; pb: number | null; online: boolean;
+  /** A room is already running and the server allows one at a time: Create is off, Join still works. */
+  roomBusy: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt', n = TEAMS.length;
   const paint = useMemo(() => ({ color: tm.color, dark: tm.dark, accent: ACCENTS[p.accent] || ACCENTS[0], livery: p.livery }), [tm, p.accent, p.livery]);
@@ -100,7 +102,7 @@ export function Garage(p: {
           <span>RACE</span><span style={{ ...mono, fontSize: 12, fontWeight: 700, letterSpacing: '.1em', opacity: 0.85 }}>SOLO · VS AI →</span>
         </Btn>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <Btn className="ghost" disabled={!!p.busy || !p.online} onClick={p.createRoom}>{p.busy === 'create' ? 'Creating…' : 'Create Room'}</Btn>
+          <Btn className="ghost" disabled={!!p.busy || !p.online || p.roomBusy} onClick={p.createRoom}>{p.busy === 'create' ? 'Creating…' : p.roomBusy ? 'Room busy' : 'Create Room'}</Btn>
           <Btn className="ghost" disabled={!!p.busy || !p.online} onClick={p.openJoin}>Join Room</Btn>
         </div>
       </div>
