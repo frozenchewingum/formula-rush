@@ -45,6 +45,9 @@ export type SoundState = 'locked' | 'on' | 'muted';
 const pref = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v == null ? d : v === 'on'; } catch { return d; } };
 const savePref = (k: string, on: boolean) => { try { localStorage.setItem(k, on ? 'on' : 'off'); } catch { /* storage blocked */ } };
 
+/** Engine and other sound effects sit a little under the music (0.6 ≈ −4.4 dB). */
+const SFX_LEVEL = 0.6;
+
 export class Music {
   ctx: AudioContext | null = null;
   /** Music bus (all score layers). */
@@ -115,7 +118,7 @@ export class Music {
     this.master.gain.value = this.musicOn ? 0.85 : 0;
     this.master.connect(comp);
     this.sfx = ctx.createGain();
-    this.sfx.gain.value = this.engineOn ? 1 : 0;
+    this.sfx.gain.value = this.engineOn ? SFX_LEVEL : 0;
     this.sfx.connect(comp);
     this.ostFilter = ctx.createBiquadFilter();
     this.ostFilter.type = 'lowpass'; this.ostFilter.Q.value = 6; this.ostFilter.frequency.value = 900;
@@ -155,7 +158,7 @@ export class Music {
   setEngineOn(on: boolean) {
     this.engineOn = on;
     savePref('fr-engine-on', on);
-    if (this.ctx) this.sfx.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.08);
+    if (this.ctx) this.sfx.gain.setTargetAtTime(on ? SFX_LEVEL : 0, this.ctx.currentTime, 0.08);
     this.onState();
   }
 
