@@ -56,6 +56,8 @@ export class Music {
   sfx!: GainNode;
   /** Everything: the sound button mutes this. */
   private out!: GainNode;
+  /** Countdown beeps: only the main sound switch mutes them. */
+  private cue!: GainNode;
   /** Called whenever `state` may have changed (first tap, mute, tab hidden). */
   onState: () => void = () => {};
   private gains = {} as Record<Layer, GainNode>;
@@ -120,6 +122,9 @@ export class Music {
     this.sfx = ctx.createGain();
     this.sfx.gain.value = this.engineOn ? SFX_LEVEL : 0;
     this.sfx.connect(comp);
+    this.cue = ctx.createGain();
+    this.cue.gain.value = 0.5;
+    this.cue.connect(comp);
     this.ostFilter = ctx.createBiquadFilter();
     this.ostFilter.type = 'lowpass'; this.ostFilter.Q.value = 6; this.ostFilter.frequency.value = 900;
     for (const l of LAYERS) {
@@ -180,6 +185,23 @@ export class Music {
   setLights(n: number) { this.lights = n; }
   setBoost(on: boolean) { this.boost = on; }
   setRain(on: boolean) { this.rain = on; }
+
+  /** Start countdown: a short beep for each red light, a long higher one on green. */
+  beep(green: boolean) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime + 0.005, len = green ? 0.42 : 0.13, f = green ? 1318.5 : 659.25;
+    for (const [type, mul, peak] of [['square', 1, 0.16], ['sine', 2, 0.1]] as [OscillatorType, number, number][]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = f * mul;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+      g.gain.setValueAtTime(peak, t + len - 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g).connect(this.cue);
+      o.start(t); o.stop(t + len + 0.02);
+    }
+  }
 
   /** Lights out: a cymbal + brass hit on the next beat. */
   hit() {

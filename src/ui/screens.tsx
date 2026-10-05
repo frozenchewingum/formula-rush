@@ -32,17 +32,8 @@ export function Garage(p: {
   openSettings: () => void; openGuide: () => void; accel: string; secret: () => void; sound: SoundState; armSound: () => void; toggleSound: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt', n = TEAMS.length;
-  const [tab, setTab] = useState<GTab>(() => { try { return (sessionStorage.getItem('fr-gtab') as GTab) || 'team'; } catch { return 'team'; } });
-  const pickTab = (t: GTab) => { setTab(t); try { sessionStorage.setItem('fr-gtab', t); } catch { /* storage blocked */ } };
-  const teamRow = useRef<HTMLDivElement>(null);
-  // keep the selected team tile in view (11 teams scroll horizontally)
-  useEffect(() => {
-    const el = teamRow.current?.children[p.team] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-  }, [p.team, tab]);
   const paint = useMemo(() => ({ color: tm.color, dark: tm.dark, accent: ACCENTS[p.accent] || ACCENTS[0], livery: p.livery }), [tm, p.accent, p.livery]);
   const arrow: CSSProperties = { position: 'absolute', top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, border: 0, background: 'rgba(14,14,17,.6)', color: '#C8C8CE', fontSize: 22, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 };
-  const tile = (on: boolean, border: string): CSSProperties => ({ height: 64, borderRadius: 10, background: on ? '#1E1E22' : '#151518', border: `1.5px solid ${on ? border : '#151518'}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', padding: 0, color: on ? '#F2F2F2' : '#8A8A92', fontSize: 11, fontWeight: 600, fontFamily: 'Barlow, sans-serif' });
   return (
     <div className="screen" style={{ ...full }}>
       {/* ---------- hero ---------- */}
@@ -98,54 +89,7 @@ export function Garage(p: {
 
       {/* ---------- controls panel ---------- */}
       <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 14, padding: '14px 20px var(--pad-bottom)', boxSizing: 'border-box', borderTop: '1px solid #1E1E22' }}>
-        <div role="tablist" aria-label="Customise car" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4, background: '#151518', borderRadius: 10, padding: 4 }}>
-          {([['team', 'TEAM'], ['livery', 'LIVERY'], ['accent', 'ACCENT']] as [GTab, string][]).map(([k, label]) => {
-            const on = tab === k;
-            return (
-              <button type="button" role="tab" aria-selected={on} key={k} onClick={() => pickTab(k)}
-                style={{ ...mono, height: 36, borderRadius: 7, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#8A8A92', fontWeight: 700, fontSize: 11, letterSpacing: '.12em', cursor: 'pointer' }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div role="tabpanel" style={{ height: 64, display: 'flex', alignItems: 'center' }}>
-          {tab === 'team' && (
-            <div ref={teamRow} className="hscroll" role="radiogroup" aria-label="Team" style={{ width: '100%', display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'calc((100% - 24px) / 5)', gap: 6, overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
-              {TEAMS.map((t, i) => (
-                <button type="button" role="radio" aria-checked={i === p.team} key={t.name} onClick={() => p.setTeam(i)} style={{ ...tile(i === p.team, t.color), scrollSnapAlign: 'start' }}>
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: `linear-gradient(135deg,${t.color} 0 50%,${t.dark} 50% 100%)` }} />
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {tab === 'livery' && (
-            <div role="radiogroup" aria-label="Livery" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-              {LIVERIES.map(([k, label]) => {
-                const [body, pod, wing, stripe] = liveryTile(p.team, k, p.accent), on = p.livery === k;
-                return (
-                  <button type="button" role="radio" aria-checked={on} key={k} onClick={() => p.setLivery(k)} style={tile(on, '#F2F2F2')}>
-                    <span style={{ width: 14, height: 30, borderRadius: '7px 7px 4px 4px', background: body, position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                      <span style={{ position: 'absolute', top: -3, left: -6, right: -6, height: 4, borderRadius: 1, background: wing }} />
-                      <span style={{ position: 'absolute', top: 10, left: -5, right: -5, height: 12, borderRadius: 3, background: pod }} />
-                      <span style={{ position: 'absolute', top: 2, bottom: 2, width: 3, borderRadius: 2, background: stripe, zIndex: 1 }} />
-                    </span>
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {tab === 'accent' && (
-            <div role="radiogroup" aria-label="Accent colour" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', boxSizing: 'border-box' }}>
-              {ACCENTS.map((c, i) => (
-                <button type="button" role="radio" aria-checked={i === p.accent} aria-label={'Accent ' + c} key={c} onClick={() => p.setAccent(i)}
-                  style={{ width: 44, height: 44, borderRadius: '50%', border: 0, padding: 0, background: c, outline: i === p.accent ? '2px solid #fff' : '2px solid transparent', outlineOffset: 3, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.15)' }} />
-              ))}
-            </div>
-          )}
-        </div>
+        <CarPicker team={p.team} setTeam={p.setTeam} livery={p.livery} setLivery={p.setLivery} accent={p.accent} setAccent={p.setAccent} />
         {(p.err || !p.online) && (
           <div style={{ ...mono, padding: '8px 12px', borderRadius: 6, background: '#2A0D0C', color: '#FF6A60', fontWeight: 700, fontSize: 11 }}>
             {p.err || 'OFFLINE · MULTIPLAYER UNAVAILABLE'}
@@ -173,6 +117,100 @@ function LongPress({ onLong, style, children }: { onLong: () => void; style?: CS
       onPointerDown={() => { stop(); timer.current = window.setTimeout(() => { onLong(); try { navigator.vibrate?.(20); } catch { /* unsupported */ } }, 700); }}
       onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}>
       {children}
+    </div>
+  );
+}
+
+/** TEAM / LIVERY / ACCENT tabs: used in the Garage and in the room's Edit car sheet. */
+export function CarPicker(p: { team: number; setTeam: (t: number) => void; livery: Livery; setLivery: (l: Livery) => void; accent: number; setAccent: (a: number) => void }) {
+  const [tab, setTab] = useState<GTab>(() => { try { return (sessionStorage.getItem('fr-gtab') as GTab) || 'team'; } catch { return 'team'; } });
+  const pickTab = (t: GTab) => { setTab(t); try { sessionStorage.setItem('fr-gtab', t); } catch { /* storage blocked */ } };
+  const teamRow = useRef<HTMLDivElement>(null);
+  // keep the selected team tile in view (11 teams scroll horizontally)
+  useEffect(() => {
+    const el = teamRow.current?.children[p.team] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [p.team, tab]);
+  const tile = (on: boolean, border: string): CSSProperties => ({ height: 64, borderRadius: 10, background: on ? '#1E1E22' : '#151518', border: `1.5px solid ${on ? border : '#151518'}`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', padding: 0, color: on ? '#F2F2F2' : '#8A8A92', fontSize: 11, fontWeight: 600, fontFamily: 'Barlow, sans-serif' });
+  return (
+    <>
+      <div role="tablist" aria-label="Customise car" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4, background: '#151518', borderRadius: 10, padding: 4 }}>
+        {([['team', 'TEAM'], ['livery', 'LIVERY'], ['accent', 'ACCENT']] as [GTab, string][]).map(([k, label]) => {
+          const on = tab === k;
+          return (
+            <button type="button" role="tab" aria-selected={on} key={k} onClick={() => pickTab(k)}
+              style={{ ...mono, height: 36, borderRadius: 7, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#8A8A92', fontWeight: 700, fontSize: 11, letterSpacing: '.12em', cursor: 'pointer' }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" style={{ height: 64, display: 'flex', alignItems: 'center' }}>
+        {tab === 'team' && (
+          <div ref={teamRow} className="hscroll" role="radiogroup" aria-label="Team" style={{ width: '100%', display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'calc((100% - 24px) / 5)', gap: 6, overflowX: 'auto', scrollSnapType: 'x mandatory' }}>
+            {TEAMS.map((t, i) => (
+              <button type="button" role="radio" aria-checked={i === p.team} key={t.name} onClick={() => p.setTeam(i)} style={{ ...tile(i === p.team, t.color), scrollSnapAlign: 'start' }}>
+                <span style={{ width: 22, height: 22, borderRadius: '50%', background: `linear-gradient(135deg,${t.color} 0 50%,${t.dark} 50% 100%)` }} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {tab === 'livery' && (
+          <div role="radiogroup" aria-label="Livery" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+            {LIVERIES.map(([k, label]) => {
+              const [body, pod, wing, stripe] = liveryTile(p.team, k, p.accent), on = p.livery === k;
+              return (
+                <button type="button" role="radio" aria-checked={on} key={k} onClick={() => p.setLivery(k)} style={tile(on, '#F2F2F2')}>
+                  <span style={{ width: 14, height: 30, borderRadius: '7px 7px 4px 4px', background: body, position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <span style={{ position: 'absolute', top: -3, left: -6, right: -6, height: 4, borderRadius: 1, background: wing }} />
+                    <span style={{ position: 'absolute', top: 10, left: -5, right: -5, height: 12, borderRadius: 3, background: pod }} />
+                    <span style={{ position: 'absolute', top: 2, bottom: 2, width: 3, borderRadius: 2, background: stripe, zIndex: 1 }} />
+                  </span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {tab === 'accent' && (
+          <div role="radiogroup" aria-label="Accent colour" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 6px', boxSizing: 'border-box' }}>
+            {ACCENTS.map((c, i) => (
+              <button type="button" role="radio" aria-checked={i === p.accent} aria-label={'Accent ' + c} key={c} onClick={() => p.setAccent(i)}
+                style={{ width: 44, height: 44, borderRadius: '50%', border: 0, padding: 0, background: c, outline: i === p.accent ? '2px solid #fff' : '2px solid transparent', outlineOffset: 3, cursor: 'pointer', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.15)' }} />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Room lobby: change team, livery, accent and starting tyres. Changing the car un-readies you. */
+export function CarSheet(p: { team: number; setTeam: (t: number) => void; livery: Livery; setLivery: (l: Livery) => void; accent: number; setAccent: (a: number) => void; tyre: Compound; setTyre: (c: Compound) => void; ready: boolean; close: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); p.close(); } };
+    window.addEventListener('keydown', k, true);
+    return () => window.removeEventListener('keydown', k, true);
+  }, [p]);
+  const tm = TEAMS[p.team] || TEAMS[0];
+  return (
+    <div className="scrim" onClick={p.close} style={{ position: 'absolute', inset: 0, background: 'rgba(5,5,6,.7)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', zIndex: 5 }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Your car" onClick={e => e.stopPropagation()}
+        style={{ background: '#151518', borderRadius: '20px 20px 0 0', padding: '12px 20px var(--pad-bottom)', display: 'flex', flexDirection: 'column', gap: 14, borderTop: '1px solid #2A2A30', maxHeight: '92%', overflowY: 'auto', boxSizing: 'border-box' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: '#3A3A42', alignSelf: 'center', flexShrink: 0 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 4, height: 26, borderRadius: 2, background: tm.color }} />
+            <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1 }}>{tm.name.toUpperCase()}</div>
+          </div>
+          <div style={{ ...mono, fontSize: 11, letterSpacing: '.12em', color: '#8A8A92' }}>YOUR CAR</div>
+        </div>
+        <CarPicker team={p.team} setTeam={p.setTeam} livery={p.livery} setLivery={p.setLivery} accent={p.accent} setAccent={p.setAccent} />
+        <TyrePicker value={p.tyre} set={p.setTyre} />
+        {p.ready && <div style={{ ...mono, fontSize: 11, color: '#FFD400' }}>CHANGING YOUR CAR UN-READIES YOU</div>}
+        <button type="button" onClick={p.close} style={{ height: 54, flexShrink: 0, borderRadius: 12, border: 0, background: '#F2F2F2', color: '#0E0E11', fontWeight: 600, fontSize: 16, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>Done</button>
+      </div>
     </div>
   );
 }
@@ -309,7 +347,7 @@ export function Join(p: { code: string; setCode: (c: string) => void; err: strin
 }
 
 // ---------------- Lobby ----------------
-export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean; openSettings: () => void; tyre: Compound; setTyre: (c: Compound) => void }) {
+export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean; openSettings: () => void; tyre: Compound; editCar: () => void }) {
   const { s } = p, room = s.room!, me = s.me(), host = s.isHost();
   const slots: (PlayerRow | null)[] = [...s.players].sort((a, b) => a.slot - b.slot);
   if (s.players.length < MAX_PLAYERS) slots.push(null);
@@ -366,7 +404,16 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
           );
         })}
       </div>
-      <TyrePicker value={p.tyre} set={p.setTyre} disabled={racing} />
+      {me && (
+        <button type="button" className={'settings-bar' + (racing ? ' locked' : '')} onClick={() => !racing && p.editCar()} aria-label="Edit your car and tyres">
+          <span style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', minWidth: 0 }}>
+            <span style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, background: `linear-gradient(135deg,${TEAMS[me.team]?.color} 0 50%,${ACCENTS[me.accent ?? 0]} 50% 100%)` }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{TEAMS[me.team]?.name.toUpperCase()} · {liveryName(isLivery(me.livery) ? me.livery : 'classic').toUpperCase()}</span>
+            <TyreDot i={COMPOUNDS.findIndex(c => c.id === p.tyre)} size={20} />
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', color: racing ? '#5A5A62' : '#F2F2F2' }}>{racing ? 'RACING' : 'EDIT CAR ›'}</span>
+        </button>
+      )}
       <div style={{ fontSize: 14, color: '#8A8A92' }}>{GRID_SIZE}-car grid. AI fills the empty spots and drivers start at the back. {MIN_PLAYERS}+ drivers to race.</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
         <Btn onClick={() => me && s.updateMe({ ready: !me.ready })} disabled={racing} style={{ height: 60, background: me?.ready ? '#22C55E' : '#1A1A1E', color: me?.ready ? '#0E0E11' : '#F2F2F2' }}>{me?.ready ? 'Ready ✓' : 'Ready up'}</Btn>
@@ -385,9 +432,9 @@ export function cleanName(v: string) {
 // ---------------- Lights ----------------
 export function Lights({ ui }: { ui: UiState }) {
   const green = ui.phase === 'green';
-  const title = green ? 'GO GO GO' : ui.phase === 'red' ? 'HOLD IT…' : 'HOLD TO REV';
-  const sub = green ? 'Release now!' : ui.phase === 'red' ? 'Release on green · early = +1s' : 'Hold screen / Space to build revs';
-  const bad = ui.reaction.startsWith('JUMP') || ui.reaction.includes('LATE');
+  const title = green ? 'GO GO GO' : ui.phase === 'red' ? 'REV IT UP' : 'GET READY';
+  const sub = green ? 'Let go now!' : 'Rev as you like · let go the instant it turns green';
+  const bad = ui.reaction.includes('LATE'), perfect = ui.reaction.startsWith('PERFECT');
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'calc(var(--pad-top) + 28px) 24px 0', gap: 24, background: 'linear-gradient(rgba(14,14,17,.94) 0,rgba(14,14,17,.7) 42%,transparent 62%)', pointerEvents: 'none' }}>
       <div style={{ display: 'flex', gap: 10, background: '#050506', padding: 14, borderRadius: 12 }}>
@@ -398,7 +445,7 @@ export function Lights({ ui }: { ui: UiState }) {
       </div>
       <div style={{ ...display, fontWeight: 800, fontSize: 44, textAlign: 'center', lineHeight: 1 }}>{title}</div>
       {ui.reaction
-        ? <div style={{ ...mono, fontSize: 36, fontWeight: 700, color: bad ? '#E10600' : '#22C55E' }}>{ui.reaction}</div>
+        ? <div style={{ ...mono, fontSize: 32, fontWeight: 700, textAlign: 'center', color: bad ? '#E10600' : perfect ? '#A855F7' : '#22C55E' }}>{ui.reaction}</div>
         : <div style={{ fontSize: 16, color: '#A8A8B0', textAlign: 'center' }}>{sub}</div>}
       <div style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ ...mono, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#8A8A92' }}><span>THROTTLE</span><span>RPM</span></div>
@@ -411,11 +458,17 @@ export function Lights({ ui }: { ui: UiState }) {
 }
 
 // ---------------- Race HUD ----------------
-export function RaceHud({ ui, tilt }: { ui: UiState; tilt: boolean }) {
+export function RaceHud({ ui, tilt, onPause }: { ui: UiState; tilt: boolean; onPause?: () => void }) {
   const h = ui.hud;
   const chip: CSSProperties = { ...mono, padding: '5px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700 };
   return (
     <>
+      {onPause && !ui.paused && (
+        <button type="button" aria-label="Pause" title="Pause (Esc)" className="icon-btn round" onClick={onPause}
+          style={{ position: 'absolute', top: 'var(--pad-top)', left: '50%', marginLeft: -22, zIndex: 2 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+        </button>
+      )}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 'var(--pad-top) 18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'linear-gradient(rgba(14,14,17,.92),transparent)', pointerEvents: 'none' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ ...display, fontWeight: 900, fontSize: 48, lineHeight: 0.9 }}>P{h.pos}<span style={{ fontSize: 22, color: '#A8A8B0' }}>/{h.field}</span></div>
@@ -460,6 +513,20 @@ function Bar({ label, w, color, tick, icon }: { label: string; w: number; color:
         <div style={{ width: w + '%', height: '100%', borderRadius: 4, background: color }} />
         {tick && <div style={{ position: 'absolute', left: '35%', top: -2, bottom: -2, width: 2, background: '#0E0E11' }} />}
       </div>
+    </div>
+  );
+}
+
+// ---------------- Pause (solo) ----------------
+export function PauseMenu({ resume, restart, exit }: { resume: () => void; restart: () => void; exit: () => void }) {
+  return (
+    <div className="screen" role="dialog" aria-modal="true" aria-label="Paused"
+      style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(8,8,10,.82)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 32px', gap: 12 }}>
+      <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 64, lineHeight: 0.9, marginBottom: 18 }}>PAUSED</div>
+      <Btn className="primary" onClick={resume} style={{ height: 60, ...display, fontWeight: 800, fontSize: 26, letterSpacing: '.04em' }}>RESUME</Btn>
+      <Btn className="secondary" onClick={restart} style={{ height: 54 }}>Restart race</Btn>
+      <Btn className="secondary" onClick={exit} style={{ height: 54 }}>Exit to Garage</Btn>
+      <div style={{ ...mono, fontSize: 11, color: '#8A8A92', textAlign: 'center', marginTop: 6 }}>ESC TO RESUME</div>
     </div>
   );
 }

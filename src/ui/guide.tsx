@@ -74,7 +74,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Nail the launch', img: 'launch', alt: 'Holding the screen through five red lights and letting go on green',
-    body: <>Press and <Y c="#FFD400">hold</Y> while the five red lights come on. Let go the instant they turn <Y c="#22C55E">green</Y>. Letting go early costs you a second.</>,
+    body: <>Five red lights count down with a beep each. Rev as much as you like: <Y c="#FFD400">hold</Y> to rev, let go to lift, no penalty. When the lights turn <Y c="#22C55E">green</Y>, let go fast. Within 0.15 s is a <Y c="#A855F7">perfect</Y> start (rolling start + boost), within 0.35 s is good, and slower than 0.7 s bogs down.</>,
     keys: 'Hold Space',
   },
   {

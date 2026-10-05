@@ -1,7 +1,7 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
   type Settings, type Controls, type Livery, type AccelModel, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
@@ -55,6 +55,7 @@ export type UiState = {
   phase: Phase; lights: number; holding: boolean; reaction: string;
   toast: Toast | null; hud: Hud; results: ResultRow[]; summary: Summary | null; showResults: boolean; showRace: boolean;
   pit: PitUi | null;
+  paused: boolean;
 };
 
 export type GridEntry = { team: number; userId?: string | null; name?: string | null; base: number; livery?: Livery; accent?: number };
@@ -88,9 +89,12 @@ type Game = {
   cars: Car[]; player: Car; t: number; laps: number; running: boolean;
   boost: number; boostT: number; drsOn: boolean; drsReady: boolean; slip: boolean;
   lapStart: number; best: number; apexHits: number; apexTotal: number; contacts: number;
-  skill: number; camH: number; fov: number; shake: number; jump: boolean; rainWas: boolean;
+  skill: number; camH: number; fov: number; shake: number; rainWas: boolean;
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
 };
+
+/** Launch grades: seconds from green to letting go, the auto-launch time and the bog-down penalty. */
+const LAUNCH_PERFECT = 0.15, LAUNCH_GOOD = 0.35, LAUNCH_OK = 0.7, LAUNCH_AUTO = 1.5, LAUNCH_BOG = 0.5;
 
 const emptyHud = (laps: number, tc = 1): Hud => ({
   pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, boostOn: false,
@@ -108,7 +112,7 @@ export class Engine {
   /** Starting tyres picked before the race (v1.5). */
   startCompound: Compound = 'medium';
   /** Acceleration feel under test (v1.8 hidden toggle). */
-  accelModel: AccelModel = 'classic';
+  accelModel: AccelModel = DEFAULT_ACCEL;
   screen: Screen = 'garage';
   ui: UiState;
   net: NetLink | null = null;
@@ -126,7 +130,6 @@ export class Engine {
   private toastSeq = 0;
   private sendT = 0;
   private netInterval = 0.1;
-  private lightsStarted = false;
   private canvas: HTMLCanvasElement | null = null;
   private raf = 0;
   private last = 0;
@@ -134,7 +137,7 @@ export class Engine {
   drawCache: { S?: (number[] | null)[][]; V?: boolean[] } = {};
 
   constructor() {
-    this.ui = { phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, hud: emptyHud(3), results: [], summary: null, showResults: false, showRace: false, pit: null };
+    this.ui = { phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, hud: emptyHud(3), results: [], summary: null, showResults: false, showRace: false, pit: null, paused: false };
     this.resetRace();
   }
 
@@ -159,7 +162,7 @@ export class Engine {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     if (this.mp && this.net && (this.g.running || this.screen === 'lights')) this.mpLights();
-    if (this.g.running) this.step(dt);
+    if (this.g.running && !this.paused) this.step(dt);
     if (this.canvas && (this.screen === 'lights' || this.screen === 'race')) drawWorld(this, this.canvas, dt);
     if (now - this.hudT > 100) { this.hudT = now; this.pushHud(); }
   }
@@ -212,19 +215,31 @@ export class Engine {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
       skill: pace > 0.98 ? 0.85 : pace > 0.93 ? 0.6 : 0.35, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
-      jump: false, rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
+      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
     this.keySteer = 0; this.dragSteer = 0; this.brakeKey = false; this.brakeTouch = false;
-    this.lightsStarted = false;
     this.set({ hud: emptyHud(laps, player.tc), pit: null });
   }
 
   startRace(mp: MpStart | null = null) {
     this.resetRace(mp);
     this.holdingFlag = false;
-    this.set({ phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, showResults: false, showRace: false, results: [], summary: null, pit: null });
+    this.paused = false;
+    this.set({ phase: 'hold', lights: 0, holding: false, reaction: '', toast: null, showResults: false, showRace: false, results: [], summary: null, pit: null, paused: false });
     this.setScreen('lights');
+    // Solo: the countdown starts on its own; rooms run it from the shared clock (mpLights).
+    if (!mp) this.later(() => { this.set({ phase: 'red' }); this.runLights(); }, 900);
+  }
+
+  // ---------- pause (solo) ----------
+  paused = false;
+  setPaused(p: boolean) {
+    if (this.mp || this.screen !== 'race' || this.g.player.finished) p = false;
+    if (p === this.paused) return;
+    this.paused = p;
+    if (p) { this.brakeKey = false; this.brakeTouch = false; this.keySteer = 0; this.dragSteer = 0; }
+    this.set({ paused: p });
   }
 
   /** Lights driven by the shared clock so every client turns green together. */
@@ -262,35 +277,41 @@ export class Engine {
   }
 
   private afterGreen() {
-    const g = this.g;
-    if (g.jump) this.later(() => this.setScreen('race'), 1000);
-    else this.later(() => { if (g.player.startDelay === Infinity) this.launch(true); }, 1500);
+    // Nobody let go: the car bogs down and goes on its own.
+    this.later(() => { if (this.g.player.startDelay === Infinity) this.launch(LAUNCH_AUTO); }, LAUNCH_AUTO * 1000);
   }
 
+  /** Throttle on the grid: rev freely during the countdown; only a release after green launches. */
   throttleDown() {
     if (this.screen !== 'lights' || this.holdingFlag) return;
     this.holdingFlag = true; this.set({ holding: true });
-    if (!this.mp && this.ui.phase === 'hold' && !this.lightsStarted) {
-      this.lightsStarted = true; this.set({ phase: 'red' }); this.runLights();
-    }
   }
 
   throttleUp() {
     if (this.screen !== 'lights' || !this.holdingFlag) return;
     this.holdingFlag = false; this.set({ holding: false });
-    const g = this.g;
-    if (this.ui.phase === 'red' && !g.jump) {
-      g.jump = true; g.player.startDelay = 1.0;
-      this.set({ reaction: 'JUMP START +1.0s' }); buzz([80, 40, 80]);
-    } else if (this.ui.phase === 'green') this.launch(false);
+    if (this.ui.phase === 'green') this.launch(this.g.t);
   }
 
-  private launch(late: boolean) {
-    const g = this.g;
-    if (g.jump || g.player.startDelay !== Infinity) return;
-    g.player.startDelay = late ? 1.5 : g.t;
-    if (!late && g.t < 0.2) g.player.v = 12;
-    this.set({ reaction: late ? '1.500s · LATE' : g.t.toFixed(3) + 's' });
+  /**
+   * Launch graded by how quickly you let go after green (seconds):
+   * ≤0.15 perfect (rolling start + boost), ≤0.35 good, ≤0.7 clean, slower = bogged down (+0.5 s).
+   */
+  private launch(r: number) {
+    const g = this.g, pl = g.player;
+    if (pl.startDelay !== Infinity) return;
+    let text: string;
+    if (r <= LAUNCH_PERFECT) {
+      pl.startDelay = r; pl.v = 18; g.boost = Math.min(100, g.boost + 20);
+      text = 'PERFECT · ' + r.toFixed(3) + 's'; buzz([20, 30, 20]);
+    } else if (r <= LAUNCH_GOOD) {
+      pl.startDelay = r; pl.v = 10; text = 'GOOD · ' + r.toFixed(3) + 's';
+    } else if (r <= LAUNCH_OK) {
+      pl.startDelay = r; text = r.toFixed(3) + 's';
+    } else {
+      pl.startDelay = r + LAUNCH_BOG; text = 'LATE START +' + LAUNCH_BOG.toFixed(1) + 's'; buzz([80, 40, 80]);
+    }
+    this.set({ reaction: text });
     this.later(() => this.setScreen('race'), 900);
   }
 
@@ -308,7 +329,7 @@ export class Engine {
   // ---------- controls ----------
   lane(dir: number) {
     const pl = this.g.player;
-    if (pl.finished || pl.pit) return;
+    if (pl.finished || pl.pit || this.paused) return;
     const cur = Math.round(pl.dTarget / LANE);
     // Swiping right from the right-hand line inside the pit window takes the pit lane.
     if (dir > 0 && cur === 1 && this.canPit(pl)) return this.enterPit(pl);
@@ -317,7 +338,7 @@ export class Engine {
 
   action() {
     const g = this.g;
-    if (g.player.finished || g.player.pit || g.t < g.player.startDelay) return;
+    if (g.player.finished || g.player.pit || this.paused || g.t < g.player.startDelay) return;
     if (g.drsReady) { g.drsOn = true; g.drsReady = false; this.toast('DRS OPEN', '#00D2BE'); buzz(20); }
     else if (g.boost >= 35) { g.boost -= 35; g.boostT = 1.6; this.toast('BOOST', '#FFD400'); buzz(30); }
     else this.toast('HIT APEXES FOR BOOST', '#8A8A92');
@@ -445,7 +466,7 @@ export class Engine {
   /** Tyre call: index into COMPOUNDS. */
   pitCall(i: number) {
     const p = this.ui.pit;
-    if (!p || p.phase !== 'call' || !COMPOUNDS[i]) return;
+    if (!p || p.phase !== 'call' || !COMPOUNDS[i] || this.paused) return;
     const order = shuffle([...WHEELS]), dirs = order.map(() => DIRS[Math.floor(Math.random() * 4)]);
     this.set({ pit: { ...p, phase: 'wheels', chosen: i, order, dirs, idx: 0 } });
     buzz(12);
@@ -453,7 +474,7 @@ export class Engine {
   /** One wheel gun: the swipe must match the direction shown on the lit wheel. */
   pitSwipe(dir: Dir) {
     const p = this.ui.pit, g = this.g;
-    if (!p || p.phase !== 'wheels') return;
+    if (!p || p.phase !== 'wheels' || this.paused) return;
     if (dir === p.dirs[p.idx]) {
       const idx = p.idx + 1;
       if (idx < 4) { this.set({ pit: { ...p, idx } }); buzz(12); return; }
@@ -766,7 +787,7 @@ export class Engine {
   soundInput(dt: number): EngineInput {
     const g = this.g, pl = g.player;
     const off: EngineInput = { mode: 'off', revving: false, v: 0, throttle: 0, boost: false, limiter: false, rival: null };
-    if (!g || (this.screen !== 'lights' && this.screen !== 'race')) { this.sndV = 0; return off; }
+    if (!g || this.paused || (this.screen !== 'lights' && this.screen !== 'race')) { this.sndV = 0; return off; }
     const moving = g.running && g.t >= pl.startDelay;
     const mode: EngineInput['mode'] = !moving ? 'grid' : pl.pit === 2 ? 'box' : 'race';
     // Throttle from what the car is doing: accelerating = flat out, braking = off, holding speed = part throttle.

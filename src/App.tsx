@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Engine, type Screen, type MpStart } from './game/engine';
-import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, isLivery, isAccelModel, type Controls, type Settings, type Livery, type AccelModel } from './game/constants';
+import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, DEFAULT_ACCEL, isLivery, isAccelModel, type Controls, type Settings, type Livery, type AccelModel } from './game/constants';
 import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
-import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
+import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, PauseMenu, CarSheet, cleanName } from './ui/screens';
 import { TyreSheet, PitStop } from './ui/tyres';
 import { isCompound, type Compound, type Dir } from './game/tyres';
 
@@ -33,10 +33,15 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
   const [tyre, setTyre] = useState<Compound>(() => { const v = ls.get('fr-tyre'); return isCompound(v) ? v : 'soft'; });
   const [showTyres, setShowTyres] = useState(false);
-  // Hidden acceleration test toggle: ?accel=… in the URL, or long-press the logo in the Garage.
+  const [showCar, setShowCar] = useState(false);
+  const closeCar = useCallback(() => setShowCar(false), []);
+  // Acceleration feel: Gentle by default (v1.10). Hidden toggle: long-press the logo in the Garage, or ?accel=….
+  // Only an explicit choice is saved ('fr-accel-v2'); the old 'fr-accel' key was written for everyone, so it's ignored.
   const [accel, setAccel] = useState<AccelModel>(() => {
-    const q = new URLSearchParams(location.search).get('accel'), v = q || ls.get('fr-accel');
-    return isAccelModel(v) ? v : 'classic';
+    const q = new URLSearchParams(location.search).get('accel');
+    if (isAccelModel(q)) { ls.set('fr-accel-v2', q); return q; }
+    const v = ls.get('fr-accel-v2');
+    return isAccelModel(v) ? v : DEFAULT_ACCEL;
   });
   const closeTyres = useCallback(() => setShowTyres(false), []);
   const [showSettings, setShowSettings] = useState(false);
@@ -73,10 +78,10 @@ export default function App() {
   useEffect(() => { engine.accent = accent; ls.set('fr-accent', String(accent)); }, [engine, accent]);
   useEffect(() => { engine.controls = controls; ls.set('fr-controls', controls); }, [engine, controls]);
   useEffect(() => { engine.startCompound = tyre; ls.set('fr-tyre', tyre); }, [engine, tyre]);
-  useEffect(() => { engine.accelModel = accel; ls.set('fr-accel', accel); }, [engine, accel]);
+  useEffect(() => { engine.accelModel = accel; }, [engine, accel]);
   const cycleAccel = () => {
     const i = ACCEL_MODELS.findIndex(m => m[0] === accel), next = ACCEL_MODELS[(i + 1) % ACCEL_MODELS.length];
-    setAccel(next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
+    setAccel(next[0]); ls.set('fr-accel-v2', next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
   };
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
@@ -110,8 +115,14 @@ export default function App() {
     const scene: Scene = screen === 'lights' ? 'lights' : screen === 'race' ? 'race' : screen === 'results' ? 'results' : 'menu';
     music.setScene(scene);
   }, [music, screen]);
-  useEffect(() => { music.setLights(ui.lights); }, [music, ui.lights]);
-  useEffect(() => { if (ui.phase === 'green' && screen === 'lights') music.hit(); }, [music, ui.phase, screen]);
+  // Countdown: a beep per red light, a long high beep on green.
+  const lastLights = useRef(0);
+  useEffect(() => {
+    music.setLights(ui.lights);
+    if (ui.lights > lastLights.current && screen === 'lights') music.beep(false);
+    lastLights.current = ui.lights;
+  }, [music, ui.lights, screen]);
+  useEffect(() => { if (ui.phase === 'green' && screen === 'lights') { music.hit(); music.beep(true); } }, [music, ui.phase, screen]);
   useEffect(() => {
     music.setFinalLap(screen === 'race' && ui.hud.laps > 1 && ui.hud.lap === ui.hud.laps);
     music.setBoost(ui.hud.boostOn || ui.hud.drsOn);
@@ -188,6 +199,12 @@ export default function App() {
     engine.resetRace(); setScreen('lobby');
     await sessionRef.current?.backToLobby();
   };
+  // Solo: pause when the app goes to the background (phone call, switching apps).
+  useEffect(() => {
+    const hide = () => { if (document.hidden) engine.setPaused(true); };
+    document.addEventListener('visibilitychange', hide);
+    return () => document.removeEventListener('visibilitychange', hide);
+  }, [engine]);
   useEffect(() => {
     const leave = () => { sessionRef.current?.close(); };
     window.addEventListener('pagehide', leave);
@@ -203,7 +220,7 @@ export default function App() {
     const down = (e: PointerEvent) => {
       ptr = { x: e.clientX, y: e.clientY, moved: false };
       if (screenRef.current === 'lights') engine.throttleDown();
-      if (screenRef.current === 'race' && !engine.pitActive) brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
+      if (screenRef.current === 'race' && !engine.pitActive && !engine.paused) brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
     };
     const move = (e: PointerEvent) => {
       if (!ptr || screenRef.current !== 'race') return;
@@ -234,6 +251,9 @@ export default function App() {
       if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current && !showTyresRef.current && !(e.target as HTMLElement)?.closest?.('button')) return startSolo();
       if (s === 'lights' && (k === ' ' || k === 'ArrowUp' || k === 'Enter')) { e.preventDefault(); if (!e.repeat) engine.throttleDown(); return; }
       if (s !== 'race') return;
+      // Solo pause: Esc or P.
+      if ((k === 'Escape' || k === 'p' || k === 'P') && !engine.mp) { e.preventDefault(); engine.setPaused(!engine.paused); return; }
+      if (engine.paused) return;
       if (engine.pitActive) {
         const dir: Dir | null = k === 'ArrowLeft' || k === 'a' ? 'left' : k === 'ArrowRight' || k === 'd' ? 'right' : k === 'ArrowUp' || k === 'w' ? 'up' : k === 'ArrowDown' || k === 's' ? 'down' : null;
         if (dir || /^[1-4]$/.test(k) || k === 'Enter' || k === ' ') e.preventDefault();
@@ -313,6 +333,14 @@ export default function App() {
     if (screen === 'lobby' && amHost) session?.setSettings(settings.laps, settings.weather);
   }, [screen, session, amHost, settings.laps, settings.weather]);
 
+  // Room lobby: push car changes to your player row (everyone repaints you); a changed car un-readies you.
+  useEffect(() => {
+    if (screen !== 'lobby' || !session?.room || session.room.status !== 'lobby') return;
+    const me = session.me();
+    if (!me) return;
+    if (me.team !== team || me.livery !== livery || (me.accent ?? 0) !== accent) session.updateMe({ team, livery, accent, ready: false });
+  }, [screen, session, team, livery, accent]);
+
   const openSettings = () => {
     if (screen === 'lobby' && session && !session.isHost()) { engine.toast('SET BY HOST', '#8A8A92'); return; }
     setShowSettings(true);
@@ -322,14 +350,18 @@ export default function App() {
     <div className="page">
       <div ref={stageRef} className="stage">
         <canvas ref={canvasRef} className="world" />
-        {screen === 'race' && <RaceHud ui={ui} tilt={controls === 'tilt'} />}
+        {screen === 'race' && <RaceHud ui={ui} tilt={controls === 'tilt'} onPause={mp ? undefined : () => engine.setPaused(true)} />}
+        {screen === 'race' && ui.paused && (
+          <PauseMenu resume={() => engine.setPaused(false)} restart={() => engine.startRace(null)}
+            exit={() => { engine.setPaused(false); engine.resetRace(); setScreen('garage'); }} />
+        )}
         {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={() => engine.g.t} wear={ui.hud.tyre / 100} carColor={engine.g.player.color} call={i => engine.pitCall(i)} />}
         {screen === 'lights' && <Lights ui={ui} />}
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
             openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound}
-            accel={accel === 'classic' ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            accel={accel === DEFAULT_ACCEL ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (
@@ -337,7 +369,11 @@ export default function App() {
             audio={{ music: music.musicOn, engine: music.engineOn, setMusic: on => { music.unlock(); music.setMusicOn(on); }, setEngine: on => { music.unlock(); music.setEngineOn(on); } }} />
         )}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}
-        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} tyre={tyre} setTyre={setTyre} />}
+        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} tyre={tyre} editCar={() => setShowCar(true)} />}
+        {screen === 'lobby' && showCar && session?.room && (
+          <CarSheet team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent}
+            tyre={tyre} setTyre={setTyre} ready={!!session.me()?.ready} close={closeCar} />
+        )}
         {screen === 'results' && (
           <Results ui={ui} mp={mp && !!session}
             toGarage={() => { if (mp && session) leaveRoom(); else { engine.resetRace(); setScreen('garage'); } }}
