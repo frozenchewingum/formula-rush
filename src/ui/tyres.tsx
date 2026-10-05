@@ -17,7 +17,8 @@ export function TyreDot({ i, size = 24 }: { i: number; size?: number }) {
   );
 }
 
-const lifeLabel = (laps: number) => '~' + (Math.round(laps * 2) / 2).toString().replace('.5', '½') + ' LAPS';
+/** Tyre life as a feel, not a lap count: players find out how far each compound goes by racing it. */
+const lifeLabel = (life: number) => life < 2 ? 'SHORT ●○○' : life < 2.8 ? 'MID ●●○' : 'LONG ●●●';
 
 /** What to start on, from the race length and the forecast. */
 export function startRecommendation(laps: number, weather: Weather): Compound {
@@ -72,7 +73,7 @@ export function TyreSheet(p: { value: Compound; set: (c: Compound) => void; laps
                   </span>
                   <span style={{ fontSize: 12, color: '#8A8A92' }}>{c.blurb}</span>
                 </span>
-                <span style={{ ...mono, fontSize: 11, color: on ? '#F2F2F2' : '#8A8A92', textAlign: 'right', whiteSpace: 'nowrap' }}>{c.id === 'wet' ? 'RAIN ONLY' : lifeLabel(c.life * 0.75)}</span>
+                <span style={{ ...mono, fontSize: 11, color: on ? '#F2F2F2' : '#8A8A92', textAlign: 'right', whiteSpace: 'nowrap' }}>{c.id === 'wet' ? 'RAIN ONLY' : lifeLabel(c.life)}</span>
               </button>
             );
           })}
