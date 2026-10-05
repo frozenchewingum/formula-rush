@@ -98,6 +98,9 @@ export interface NetLink {
   sendFinish(m: FinishMsg): void;
 }
 
+/** Slipstream pull 0–1 by gap to the car ahead: nothing right on its gearbox, full from 12 to 22 units back, gone by 30. */
+const towPull = (gap: number) => gap < 5 ? 0 : gap < 12 ? (gap - 5) / 7 : gap < 22 ? 1 : gap < 30 ? (30 - gap) / 8 : 0;
+
 type Game = {
   cars: Car[]; player: Car; t: number; laps: number; running: boolean;
   boost: number; boostT: number; drsOn: boolean; drsReady: boolean; slip: boolean;
@@ -106,6 +109,8 @@ type Game = {
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
   /** Slingshot: seconds left, and the car you were towing behind (v1.19). */
   slingT: number; towCar: Car | null;
+  /** Tow (v1.23): eased strength 0–1, seconds spent in a real tow, and the line you were on while in it. */
+  tow: number; towT: number; towD: number;
   /** Braking (v1.20): toast cooldown for running wide, seconds the brake has been held, wheels locked, pit entry judged, pit speeding penalty. */
   wideCd: number; brakeHeld: number; locked: boolean; pitJudged: boolean; pitPen: number;
 };
@@ -243,7 +248,7 @@ export class Engine {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
       skill: ai.skill, ai, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
-      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0, slingT: 0, towCar: null, wideCd: 0, brakeHeld: 0, locked: false, pitJudged: false, pitPen: 0,
+      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0, slingT: 0, towCar: null, tow: 0, towT: 0, towD: 0, wideCd: 0, brakeHeld: 0, locked: false, pitJudged: false, pitPen: 0,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
     this.keySteer = 0; this.dragSteer = 0; this.brakeKey = false; this.brakeTouch = false;
@@ -599,7 +604,7 @@ export class Engine {
       if (c.isPlayer && !c.pit) {
         if (g.boostT > 0) mult *= 1.25;
         if (g.drsOn) mult *= 1.12;
-        if (g.slip) mult *= g.ai.slip;
+        if (g.tow > 0) mult *= 1 + (g.ai.slip - 1) * g.tow;
         if (g.slingT > 0) mult *= g.ai.sling[0];
         if (c.contactT > 0.5) mult *= g.ai.bump[1];
       } else if (!c.isPlayer) {
@@ -613,7 +618,7 @@ export class Engine {
         c.boostOn = live && c.abT > 0;
         if (c.boostOn) mult *= 1.25;
         if (c.abT > 0) c.abT -= dt;
-        else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl && sl.gap > 6) mult *= g.ai.slip; }
+        else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl) mult *= 1 + (g.ai.slip - 1) * towPull(sl.gap); }
       }
       if (c.pit) vmax = Math.min(vmax, VMAX);
       const corner = Math.sqrt(G / Math.max(T.ka[c.i], 1e-4));
@@ -881,16 +886,23 @@ export class Engine {
     const gapT = ah ? ah.gap / Math.max(pl.v, 1) : 9;
     if (g.drsOn && !inZone) g.drsOn = false;
     g.drsReady = inZone && !g.drsOn && gapT < 1.0 && pl.p > 0 && !pl.pit;
-    const sl = this.carAhead(pl, 30, 1.6);
-    const wasSlip = g.slip;
-    g.slip = !!(sl && sl.gap > 6);
-    if (g.slip) g.towCar = sl!.car;
-    else if (wasSlip && g.towCar) {
-      // Pulled out of the tow with the car still just ahead: slingshot past it.
-      const o = g.towCar, gap = o.p - pl.p;
-      if (gap > 0 && gap < 36 && Math.abs(o.d - pl.dTarget) >= 1.6 && !pl.pit) { g.slingT = g.ai.sling[1]; this.toast('SLINGSHOT', '#00D2BE'); }
-      g.towCar = null;
+    // Slipstream (v1.23): the pull builds and fades smoothly with the gap instead of switching on and off,
+    // tails off as you close right up (no shove into the gearbox ahead), and only a real move out of a
+    // built-up tow earns the slingshot (not the car ahead changing lines, or simply catching it).
+    const sl = !pl.pit && pl.p > 0 ? this.carAhead(pl, 30, 1.6) : null;
+    const want = sl ? towPull(sl.gap) : 0;
+    g.tow += (want - g.tow) * Math.min(1, dt * (want > g.tow ? 2.5 : 4));
+    if (g.tow < 0.02) g.tow = 0;
+    if (sl && want > 0.3) {
+      if (g.towCar !== sl.car) { g.towCar = sl.car; g.towT = 0; }
+      g.towT += dt; g.towD = pl.dTarget;
+    } else if (g.towCar) {
+      const o = g.towCar, gap = o.p - pl.p, moved = Math.abs(pl.dTarget - g.towD) > 1.2 && Math.abs(o.d - pl.dTarget) >= 1.6;
+      if (moved && g.towT > 0.8 && gap > 0 && gap < 24 && !pl.pit) { g.slingT = g.ai.sling[1]; this.toast('SLINGSHOT', '#00D2BE'); }
+      // Still sitting behind the same car (just a touch close): keep the tow alive, otherwise drop it.
+      if (moved || !sl || sl.car !== o) { g.towCar = null; g.towT = 0; }
     }
+    g.slip = g.tow > 0.35;
     if (g.slingT > 0) g.slingT -= dt;
     if (g.boostT > 0) g.boostT -= dt;
     // Team radio: worn tyres with laps still to run.

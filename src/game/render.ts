@@ -87,23 +87,6 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
       if (nl === 4) { quad(16, 17, i, j); ctx.fill(); }
     }
   }
-  // Narrowing ahead (v1.21): yellow chevrons on both edges pointing in, where the lanes run out.
-  ctx.fillStyle = 'rgba(255,212,0,.85)';
-  for (let b = 0; b < T.N; b++) {
-    if (T.lanes[b] >= T.lanes[(b - 1 + T.N) % T.N]) continue;
-    for (let n = 0; n < 3; n++) {
-      const i = (b - 3 - n * 4 + T.N) % T.N, j = (i + 2) % T.N;
-      if (!vis[i] || !vis[j]) continue;
-      for (const side of [-1, 1]) {
-        const w = T.hw[i], m = (i + 1) % T.N;
-        const a = proj(T.x[i] + T.nx[i] * (w - 0.6) * side, T.y[i] + T.ny[i] * (w - 0.6) * side);
-        const t = proj(T.x[m] + T.nx[m] * (w - 2.8) * side, T.y[m] + T.ny[m] * (w - 2.8) * side);
-        const c = proj(T.x[j] + T.nx[j] * (w - 0.6) * side, T.y[j] + T.ny[j] * (w - 0.6) * side);
-        if (!a || !t || !c) continue;
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(t[0], t[1]); ctx.lineTo(c[0], c[1]); ctx.closePath(); ctx.fill();
-      }
-    }
-  }
   // Brake boards 3 · 2 · 1 on the outside of each corner that needs braking (v1.20).
   for (const b of T.brakes) {
     let kk = 0;
