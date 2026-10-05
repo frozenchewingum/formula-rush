@@ -4,7 +4,7 @@ import {
   TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, aiProfile, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
   type Settings, type Controls, type Livery, type AccelModel, type AiPace, type AiProfile, DEFAULT_SETTINGS,
 } from './constants';
-import { buildTrack, trackAt, trackDef, type Track } from './track';
+import { buildTrack, trackAt, trackDef, CENTRES, type Track } from './track';
 import { drawWorld } from './render';
 import type { EngineInput } from '../audio/engineSound';
 import {
@@ -207,6 +207,8 @@ export class Engine {
         ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
         : { team: t, userId: null, base: aiBase(i, ai) });
     }
+    // Per-track AI pace (v1.21); the extra braking factor only where you brake for corners yourself (Hard / Expert).
+    const td = trackDef(trackId), trackAi = (td.aiPace ?? 1) * (ai.assist === 0 || ai.assist > 1.1 ? td.brakePace ?? 1 : 1);
     const myId = mp && this.net ? this.net.myId : 'me';
     const host = !mp || !this.net || this.net.isHost();
     const rainPlan = mp ? mp.rainPlan : makeRainPlan(this.settings.weather, laps, T.L);
@@ -221,7 +223,7 @@ export class Engine {
         team: tm.name, teamColor: tm.color, ...paint,
         isPlayer: me, remote: !me && (human || !host), ai: !human,
         p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
-        base: me ? VMAX : e.base, startDelay: me ? Infinity : ai.launch[0] + Math.random() * (ai.launch[1] - ai.launch[0]),
+        base: me ? VMAX : human ? e.base : e.base * trackAi, startDelay: me ? Infinity : ai.launch[0] + Math.random() * (ai.launch[1] - ai.launch[0]),
         think: Math.random() * 2, yawOff: 0, contactT: 0, finished: false, finishTime: 0,
         boostOn: false, drsOn: false, brakeOn: false, dnf: false, snaps: [],
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
@@ -356,10 +358,10 @@ export class Engine {
   lane(dir: number) {
     const pl = this.g.player;
     if (pl.finished || pl.pit || this.paused) return;
-    const cur = Math.round(pl.dTarget / LANE);
+    const cs = this.centres(pl.p, 20), cur = this.nearestIdx(cs, pl.dTarget);
     // Swiping right from the right-hand line inside the pit window takes the pit lane.
-    if (dir > 0 && cur === 1 && this.canPit(pl)) return this.enterPit(pl);
-    pl.dTarget = clamp(cur + dir, -1, 1) * LANE;
+    if (dir > 0 && cs.length === 3 && cur === 2 && this.canPit(pl)) return this.enterPit(pl);
+    pl.dTarget = cs[clamp(cur + dir, 0, cs.length - 1)];
   }
 
   action() {
@@ -380,12 +382,30 @@ export class Engine {
     }
     return best ? { car: best, gap: bg } : null;
   }
+  // ---------- lanes (v1.21: 1–3 lanes per section) ----------
+  private idx(p: number) { const T = this.T; return Math.floor((((p % T.L) + T.L) % T.L) / T.step) % T.N; }
+  /** Fewest lanes over the next `ahead` units: what a car must fit into soon. */
+  lanesAhead(p: number, ahead = 36) {
+    const T = this.T, i0 = this.idx(p);
+    let n = 3;
+    for (let j = 0; j <= ahead / T.step; j++) n = Math.min(n, T.lanes[(i0 + j) % T.N]);
+    return n;
+  }
+  /** Lane centres a car at `p` should use. */
+  centres(p: number, ahead = 36) { return CENTRES[this.lanesAhead(p, ahead)]; }
+  private nearestIdx(cs: number[], d: number) {
+    let b = 0;
+    for (let k = 1; k < cs.length; k++) if (Math.abs(cs[k] - d) < Math.abs(cs[b] - d)) b = k;
+    return b;
+  }
+  /** Road half width at `p` (tapers into narrow sections). */
+  halfAt(p: number) { return this.T.hw[this.idx(p)]; }
   /** AI `c` moves to a free line away from `from` (and stops defending for a moment). */
   private giveWay(c: Car, from: Car) {
-    const cur = Math.round(c.dTarget / LANE), them = Math.round(from.dTarget / LANE);
-    const opts = [-1, 0, 1].filter(l => l !== cur && l !== them).concat([-1, 0, 1].filter(l => l !== cur && l === them));
-    for (const l of opts) {
-      if (this.laneFree(c, l * LANE) && !this.makesWall(c, l * LANE)) { c.dTarget = l * LANE; c.defT = 2.5; return; }
+    const cs = this.centres(c.p), cur = this.nearestIdx(cs, c.dTarget), them = this.nearestIdx(cs, from.dTarget);
+    const all = cs.map((_, k) => k), opts = all.filter(k => k !== cur && k !== them).concat(all.filter(k => k !== cur && k === them));
+    for (const k of opts) {
+      if (this.laneFree(c, cs[k]) && !this.makesWall(c, cs[k])) { c.dTarget = cs[k]; c.defT = 2.5; return; }
     }
   }
   private laneFree(c: Car, d: number) {
@@ -397,6 +417,7 @@ export class Engine {
   }
   /** True if putting `c` on lane `d` would fill all three lanes side by side (a wall nobody can pass). */
   private makesWall(c: Car, d: number) {
+    if (this.lanesAhead(c.p, 20) < 3) return false; // narrow: no third lane to keep open
     const lanes = new Set([Math.round(d / LANE)]);
     for (const o of this.g.cars) {
       if (o !== c && !o.finished && Math.abs(o.p - c.p) < 14 && Math.abs(o.dTarget) < HALF) lanes.add(Math.round(o.dTarget / LANE));
@@ -555,7 +576,7 @@ export class Engine {
 
   // ---------- simulation ----------
   private step(dt: number) {
-    const g = this.g, T = this.T, pl = g.player, rain = this.isRain(), L = LANE;
+    const g = this.g, T = this.T, pl = g.player, rain = this.isRain();
     if (!this.mp) g.t += dt;
     if (rain && !g.rainWas && g.t > 2) this.toast('RAIN', '#3B6CFF');
     if (!rain && g.rainWas && g.t > 2) this.toast('TRACK DRYING', '#F2F2F2');
@@ -565,7 +586,7 @@ export class Engine {
       const steer = this.keySteer || this.dragSteer || this.gyroSteer || 0;
       // Steering hard right at the right-hand edge inside the pit window takes the pit lane.
       if (steer > 0.55 && pl.d > LANE + 0.6 && this.canPit(pl)) this.enterPit(pl);
-      else pl.dTarget = clamp(pl.d + steer * 7, -HALF + 0.6, HALF - 0.6);
+      else { const w = Math.min(this.halfAt(pl.p), this.halfAt(pl.p + 12)) - 1.6; pl.dTarget = clamp(pl.d + steer * 7, -w, w); }
     }
     for (const c of g.cars) {
       if (c.remote) { this.stepRemote(c, dt); continue; }
@@ -618,15 +639,37 @@ export class Engine {
       if (!c.isPlayer && !c.finished && started) this.aiPitCheck(c, rain);
       if (c.pit) target = this.pitSpeed(c, target, dt);
       if (c.pit === 2) { if (c.isPlayer) this.stepPitUi(); continue; }
+      // Narrowing ahead (v1.21): every car is funnelled onto a line that still exists, a free one if there is.
+      if (!c.pit && started && !c.finished && !(c.isPlayer && this.controls === 'tilt')) {
+        const cs = this.centres(c.p);
+        if (Math.abs(cs[this.nearestIdx(cs, c.dTarget)] - c.dTarget) > 0.2) {
+          const order = cs.map((_, j) => j).sort((a, b) => Math.abs(cs[a] - c.d) - Math.abs(cs[b] - c.d));
+          const free = order.find(j => this.laneFree(c, cs[j]));
+          c.dTarget = cs[free ?? order[0]];
+        }
+      }
+      // Easy / Normal: in single file your car keeps its distance to the car ahead by itself.
+      // In narrow sections it also watches where cars are heading, so a car merging in just ahead is let in.
+      if (c.isPlayer && g.ai.follow && !c.pit && started && !c.finished && this.lanesAhead(c.p, 20) < 3) {
+        const one = this.lanesAhead(c.p, 20) === 1;
+        const ah = g.cars.filter(o => o !== c && !o.pit && o.p > c.p && o.p - c.p < 14 && (one || Math.abs(o.dTarget - c.dTarget) < 2.0 || Math.abs(o.d - c.d) < 2.0))
+          .sort((a, b) => a.p - b.p)[0];
+        if (ah) target = Math.min(target, ah.v * (ah.p - c.p < 6 ? 0.95 : 1));
+      }
+      // Merging side by side: the car behind backs off and lets the one ahead have the line (you too on Easy / Normal).
+      if ((!c.isPlayer || g.ai.follow) && !c.pit && started && !c.finished) {
+        const alongside = g.cars.find(o => o !== c && !o.pit && o.p > c.p && o.p - c.p < 7 && Math.abs(o.dTarget - c.dTarget) < 2.4 && Math.abs(o.d - c.d) > 1.2);
+        if (alongside) target = Math.min(target, alongside.v * 0.9);
+      }
       if (!c.isPlayer && !c.pit) {
         const ah = this.carAhead(c, 16, 2.3);
         if (ah) {
           let moved = false;
           if (ah.car.v < c.v + 2) {
-            const li = Math.round(c.dTarget / L);
+            const cs = this.centres(c.p), li = this.nearestIdx(cs, c.dTarget);
             for (const dl of (Math.random() < 0.5 ? [1, -1] : [-1, 1])) {
               const nl = li + dl;
-              if (nl >= -1 && nl <= 1 && this.laneFree(c, nl * L) && !this.makesWall(c, nl * L)) { c.dTarget = nl * L; moved = true; break; }
+              if (nl >= 0 && nl < cs.length && this.laneFree(c, cs[nl]) && !this.makesWall(c, cs[nl])) { c.dTarget = cs[nl]; moved = true; break; }
             }
           }
           if (!moved || ah.gap < 6) target = Math.min(target, ah.car.v * (ah.gap < 6 ? 0.95 : 1));
@@ -637,15 +680,17 @@ export class Engine {
         if (c.think <= 0) {
           c.think = 1.5 + Math.random() * 3;
           const ap = this.nextApex(c.p);
-          const want = ap && Math.random() < g.skill ? ap.d : (Math.random() < 0.35 ? (Math.floor(Math.random() * 3) - 1) * L : c.dTarget);
+          const cs = this.centres(c.p);
+          const raw = ap && Math.random() < g.skill ? ap.d : (Math.random() < 0.35 ? cs[Math.floor(Math.random() * cs.length)] : c.dTarget);
+          const want = cs[this.nearestIdx(cs, raw)];
           if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
         // Defending: a human closing in behind on another line → move across to cover it, now and then.
         if (g.ai.defend && started && !c.finished && (c.defT -= dt) <= 0) {
           c.defT = 0.9 + Math.random() * 0.6;
           const chaser = g.cars.find(o => !o.ai && !o.pit && !o.finished && c.p - o.p > 8 && c.p - o.p < 30 && Math.abs(o.d - c.dTarget) > 2.3);
-          const cover = chaser ? Math.round(chaser.dTarget / L) * L : 0;
-          if (chaser && Math.random() < g.ai.defend && Math.abs(cover) <= L && this.laneFree(c, cover) && !this.makesWall(c, cover)) c.dTarget = cover;
+          const cs = this.centres(c.p), cover = chaser ? cs[this.nearestIdx(cs, chaser.dTarget)] : 0;
+          if (chaser && Math.random() < g.ai.defend && this.laneFree(c, cover) && !this.makesWall(c, cover)) c.dTarget = cover;
         }
         // Giving way: a clearly faster human closing in on the same line → step aside, more readily on easier levels.
         if (g.ai.yield && started && !c.finished && (c.yT -= dt) <= 0) {
@@ -667,7 +712,7 @@ export class Engine {
         if (Math.abs(kk) > 0.006 && c.v > vs) {
           const e = c.v / vs - 1, out = -Math.sign(kk);
           c.v -= c.v * Math.min(0.6, e * 2.2) * dt;
-          if (e > 0.08 && this.controls !== 'tilt') c.dTarget = out * L;
+          if (e > 0.08 && this.controls !== 'tilt') { const cs = this.centres(c.p, 12); c.dTarget = out * cs[cs.length - 1]; }
           c.d += out * Math.min(30, e * 120) * dt;
           c.wear = Math.max(0, c.wear - e * 0.04 * dt);
           if (e > 0.05 && g.wideCd <= 0) { g.wideCd = 2; this.toast('RUNNING WIDE', '#FF8A00'); buzz(25); }
@@ -796,7 +841,7 @@ export class Engine {
       c.remote = false; c.startDelay = 0; c.snaps = [];
       // Pit lane state isn't broadcast: a car caught in the pit lane finishes its stop with fresh tyres.
       if (Math.abs(c.d) > HALF) { c.pit = 3; c.wear = 1; c.outP = Math.max(c.p, Math.ceil((c.p - PIT.EXIT) / this.T.L) * this.T.L + PIT.EXIT); c.dTarget = PIT.D; }
-      else c.dTarget = Math.round(c.d / LANE) * LANE;
+      else { const cs = this.centres(c.p); c.dTarget = cs[this.nearestIdx(cs, c.d)]; }
     }
   }
   /** A remote human vanished mid-race: freeze them as a slow AI so the grid stays sane. */
@@ -857,7 +902,8 @@ export class Engine {
     for (const o of g.cars) {
       if (o === pl || pl.contactT > 0 || o.pit || Math.abs(o.d) > HALF + 0.5) continue;
       const dp = o.p - pl.p, dd = Math.abs(o.d - pl.d);
-      if (Math.abs(dp) < 4.8 && dd < 2.05) {
+      // From behind it only counts when you're closing in (or right on top of them), not when they pull away.
+      if (Math.abs(dp) < 4.8 && dd < 2.05 && !(dp > 3.2 && o.v > pl.v)) {
         if (dp > 1.5) {
           pl.v = Math.min(pl.v, o.v * g.ai.bump[0]);
           // Easier AI shuffle aside after a tap from behind.
@@ -867,14 +913,16 @@ export class Engine {
           pl.v *= 0.88;
           if (!o.remote) o.v *= 0.9;
           const away = pl.d < o.d ? -1 : 1;
-          pl.dTarget = clamp(Math.round(pl.d / LANE) + away, -1, 1) * LANE;
+          const cs = this.centres(pl.p, 12);
+          pl.dTarget = cs[clamp(this.nearestIdx(cs, pl.d) + away, 0, cs.length - 1)];
         }
         pl.contactT = 1.0; g.contacts++; g.shake = 0.35; pl.wear = Math.max(0, pl.wear - 0.03);
         this.toast('CONTACT', '#E10600'); buzz([60, 30, 60]);
       }
     }
-    if (Math.abs(pl.d) > HALF - 0.9 && pl.contactT <= 0) {
-      pl.v *= 0.8; pl.contactT = 0.8; g.contacts++; g.shake = 0.3; pl.dTarget = Math.sign(pl.d) * (HALF - 2); pl.wear = Math.max(0, pl.wear - 0.04);
+    if (Math.abs(pl.d) > this.halfAt(pl.p) - 0.9 && pl.contactT <= 0) {
+      const cs = this.centres(pl.p, 12);
+      pl.v *= 0.8; pl.contactT = 0.8; g.contacts++; g.shake = 0.3; pl.dTarget = Math.sign(pl.d) * cs[cs.length - 1]; pl.wear = Math.max(0, pl.wear - 0.04);
       this.toast('WALL', '#E10600'); buzz([60, 30, 60]);
     }
   }
