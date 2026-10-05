@@ -42,7 +42,7 @@ export const sendInterval = (n: number) => Math.max(0.1, (3 * Math.max(2, n) - 2
 export const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export type Weather = 'Random' | 'Dry' | 'Rain' | 'Rain on final lap';
-export type AiPace = 'Easy' | 'Normal' | 'Hard';
+export type AiPace = 'Easy' | 'Normal' | 'Hard' | 'Expert';
 export type Controls = 'swipe' | 'tilt';
 
 export type Settings = { cameraTilt: number; weather: Weather; aiPace: AiPace; laps: number };
@@ -85,7 +85,24 @@ export function liveryTile(team: number, livery: Livery, accent: number) {
 }
 export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', aiPace: 'Normal', laps: 3 };
 
-export const PACE: Record<AiPace, number> = { Easy: 0.9, Normal: 0.955, Hard: 0.995 };
+/**
+ * AI difficulty (v1.16). pace: top speed vs your car · spread: gap from the front of the AI field to
+ * the back · skill: chance of taking the racing line through the next apex (also pit calls) ·
+ * grip: cornering grip vs yours · accel: pull out of corners (1 ≈ your car) · launch: reaction
+ * window at lights out (s) · tow / drs: AI uses slipstream / DRS like you do.
+ */
+export type AiProfile = {
+  pace: number; spread: number; skill: number; grip: number; accel: number;
+  launch: [number, number]; tow: boolean; drs: boolean; blurb: string;
+};
+export const AI_LEVELS: AiPace[] = ['Easy', 'Normal', 'Hard', 'Expert'];
+export const AI: Record<AiPace, AiProfile> = {
+  Easy:   { pace: 0.88,  spread: 0.07,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, blurb: 'Slow, sloppy lines, late off the line' },
+  Normal: { pace: 0.945, spread: 0.05,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, blurb: 'Fair fight · AI uses the slipstream' },
+  Hard:   { pace: 0.985, spread: 0.04,  skill: 0.8,  grip: 1,    accel: 0.97, launch: [0.1, 0.28],  tow: true,  drs: true,  blurb: 'Tight field · slipstream and DRS' },
+  Expert: { pace: 1.015, spread: 0.025, skill: 0.95, grip: 1.04, accel: 1,    launch: [0.06, 0.16], tow: true,  drs: true,  blurb: 'Flat out · you need boost, apexes and DRS' },
+};
+export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;
 
 // ---------- Acceleration feel (default Gentle; hidden toggle: long-press the logo, or ?accel=classic|curve|gentle) ----------
 export type AccelModel = 'classic' | 'curve' | 'gentle';

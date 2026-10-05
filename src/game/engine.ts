@@ -1,8 +1,8 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
-  type Settings, type Controls, type Livery, type AccelModel, DEFAULT_SETTINGS,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, aiProfile, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
+  type Settings, type Controls, type Livery, type AccelModel, type AiPace, type AiProfile, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
@@ -65,6 +65,8 @@ export type GridEntry = { team: number; userId?: string | null; name?: string | 
 export type MpStart = {
   grid: GridEntry[]; laps: number; rainPlan: [number, number][];
   greenAt: number; lightsDelay: number; hostId: string;
+  /** AI difficulty the host picked (v1.16; older hosts leave it out). */
+  ai?: AiPace;
 };
 export type FinishInfo = {
   pos: number; totalTime: number; bestLap: number | null; apexes: string; contacts: number;
@@ -94,7 +96,7 @@ type Game = {
   cars: Car[]; player: Car; t: number; laps: number; running: boolean;
   boost: number; boostT: number; drsOn: boolean; drsReady: boolean; slip: boolean;
   lapStart: number; best: number; apexHits: number; apexTotal: number; contacts: number;
-  skill: number; camH: number; fov: number; shake: number; rainWas: boolean;
+  skill: number; ai: AiProfile; camH: number; fov: number; shake: number; rainWas: boolean;
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
 };
 
@@ -181,7 +183,7 @@ export class Engine {
     this.mp = mp;
     const T = this.T;
     const laps = mp ? mp.laps : this.settings.laps;
-    const pace = PACE[this.settings.aiPace] || 0.955;
+    const ai = aiProfile(mp ? mp.ai ?? this.settings.aiPace : this.settings.aiPace);
     let grid: GridEntry[];
     if (mp) grid = mp.grid;
     else {
@@ -190,7 +192,7 @@ export class Engine {
       const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
       grid = teams.map((t, i) => i === GRID_SLOT
         ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
-        : { team: t, userId: null, base: aiBase(i, pace) });
+        : { team: t, userId: null, base: aiBase(i, ai) });
     }
     const myId = mp && this.net ? this.net.myId : 'me';
     const host = !mp || !this.net || this.net.isHost();
@@ -206,7 +208,7 @@ export class Engine {
         team: tm.name, teamColor: tm.color, ...paint,
         isPlayer: me, remote: !me && (human || !host), ai: !human,
         p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
-        base: me ? VMAX : e.base, startDelay: me ? Infinity : 0.15 + Math.random() * 0.3,
+        base: me ? VMAX : e.base, startDelay: me ? Infinity : ai.launch[0] + Math.random() * (ai.launch[1] - ai.launch[0]),
         think: Math.random() * 2, yawOff: 0, contactT: 0, finished: false, finishTime: 0,
         boostOn: false, drsOn: false, brakeOn: false, dnf: false, snaps: [],
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
@@ -224,7 +226,7 @@ export class Engine {
     this.g = {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
-      skill: pace > 0.98 ? 0.85 : pace > 0.93 ? 0.6 : 0.35, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
+      skill: ai.skill, ai, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
       rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
@@ -536,13 +538,20 @@ export class Engine {
       if (c.remote) { this.stepRemote(c, dt); continue; }
       const started = g.t >= c.startDelay;
       const tp = tyrePerf(c.tc, c.wear, rain);
-      const G = 66 * tp.grip;
+      const G = 66 * tp.grip * (c.isPlayer ? 1 : g.ai.grip);
       let vmax = c.base * tp.speed, mult = 1;
       if (c.isPlayer && !c.pit) {
         if (g.boostT > 0) mult *= 1.25;
         if (g.drsOn) mult *= 1.12;
         if (g.slip) mult *= 1.06;
         if (c.contactT > 0.5) mult *= 0.7;
+      } else if (!c.isPlayer) {
+        // Hard / Expert AI open DRS within a second of the car ahead; Normal+ take a tow.
+        const live = !c.pit && started && !c.finished;
+        const far = live && g.ai.drs && T.drs[c.i] ? this.carAhead(c, 400, 99) : null;
+        c.drsOn = !!far && far.gap / Math.max(c.v, 1) < 1;
+        if (c.drsOn) mult *= 1.12;
+        else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl && sl.gap > 6) mult *= 1.06; }
       }
       if (c.pit) vmax = Math.min(vmax, VMAX);
       let target = started ? Math.min(vmax, Math.sqrt(G / Math.max(T.ka[c.i], 1e-4))) * mult : 0;
@@ -577,7 +586,7 @@ export class Engine {
           if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
       }
-      c.v += clamp(target - c.v, -75 * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * dt);
+      c.v += clamp(target - c.v, -75 * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * (c.isPlayer ? 1 : g.ai.accel / (24 / 26)) * dt);
       const prevD = c.d;
       const wets = spec(c.tc).id === 'wet';
       const lr = c.isPlayer ? 16 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;
@@ -884,8 +893,8 @@ export function shuffle<T>(a: T[]) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-export function aiBase(i: number, pace: number) {
-  return VMAX * pace * (1.01 - i * (0.05 / GRID_SIZE) + (Math.random() - 0.5) * 0.02);
+export function aiBase(i: number, ai: AiProfile) {
+  return VMAX * ai.pace * (1 + ai.spread * 0.2 - i * (ai.spread / GRID_SIZE) + (Math.random() - 0.5) * 0.02);
 }
 
 /** Weather plan in track-progress units: list of [fromP, toP) ranges where it rains. */
@@ -907,7 +916,7 @@ export function makeRainPlan(weather: Settings['weather'], laps: number, trackL:
  * (P9–P12 for 4 drivers); AI fills everything ahead.
  */
 export function buildMpGrid(players: { userId: string; name: string; team: number; livery?: Livery; accent?: number }[], aiPace: Settings['aiPace']): GridEntry[] {
-  const pace = PACE[aiPace] || 0.955;
+  const ai = aiProfile(aiPace);
   const humans = players.slice(0, GRID_SIZE);
   const pool: number[] = [];
   for (let t = 0; t < TEAMS.length; t++) for (let j = 0; j < 2; j++) pool.push(t);
@@ -917,5 +926,5 @@ export function buildMpGrid(players: { userId: string; name: string; team: numbe
   const grid: (GridEntry | null)[] = new Array(GRID_SIZE).fill(null);
   humans.forEach((p, n) => { grid[slots[n]] = { team: p.team, userId: p.userId, name: p.name, base: VMAX, livery: p.livery, accent: p.accent }; });
   let q = 0;
-  return grid.map((e, i) => e || { team: pool[q++ % pool.length], userId: null, name: null, base: aiBase(i, pace) });
+  return grid.map((e, i) => e || { team: pool[q++ % pool.length], userId: null, name: null, base: aiBase(i, ai) });
 }
