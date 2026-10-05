@@ -81,3 +81,7 @@ input[type=range] { width: 100%; accent-color: #E10600; height: 28px; }
 /* v1.5 tyres & pit stops */
 .pulse { animation: pulse .9s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .45 } }
+
+/* Sound button: white while playing, pulsing until the first tap lets the browser start audio. */
+.icon-btn.round.sound-on { color: #F2F2F2; }
+.icon-btn.round.sound-locked { color: #FFD400; animation: pulse 1.4s ease-in-out infinite; }

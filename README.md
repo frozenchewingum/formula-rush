@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -122,7 +122,17 @@ Room invites use `?room=CODE` deep links; `404.html` is a copy of the app so lin
 
 `src/audio/music.ts` is an original score synthesized live with Web Audio, so there are no audio files and nothing to license. There are four sister tracks: **Lights Out** (D minor, 120 BPM), **Slipstream** (E minor, 128), **Apex Hunter** (A minor, 124) and **Night Race** (C minor, 116). They share the same sound (a pulsing 16th-note ostinato, a pedal bass, low brass swells and drums) and differ in key, tempo, chord progression and arpeggio pattern. A random track plays in the Garage and each race moves to the next one. Layers follow the race: a calm pad in the Garage, a heartbeat and ticking that build with each red light, a hit on lights-out, the full groove while racing (brighter on boost/DRS, darker in rain), and extra percussion and a high line on the final lap.
 
-Audio starts on the first tap or key press (a browser rule). Toggle it with the speaker button in the Garage or the **M** key; the choice is remembered.
+Audio starts on the first tap or key press (a browser rule). Phones only count a tap as a gesture when the finger lifts, so the game listens for `pointerdown`, `pointerup`, `touchend`, `click` and `keydown`, and on iOS it sets `navigator.audioSession.type = 'playback'` so sound plays even with the ring/silent switch on silent. The speaker button in the Garage pulses yellow until sound has started, is white while playing and shows a cross when muted. The tap that starts the audio never also mutes it. **M** toggles all sound. Race settings → More has separate **Music** and **Engine sound** switches; all three choices are remembered.
+
+### Engine sound
+
+`src/audio/engineSound.ts` synthesizes an F1-style turbo V6 on the same audio context (its own bus, so it can be switched off separately from the music). There are no samples.
+
+- **Voice:** a sawtooth at the firing frequency (rpm ÷ 20 for a V6), a half-order square, a detuned saw for roughness and a 2nd-order triangle, soft-clipped and run through a low-pass filter that opens with throttle and revs. Band-passed noise adds intake hiss, and a thin sine a few orders up adds turbo/MGU-K whine (louder on boost).
+- **On the grid:** idle at ~4,200 rpm. Holding the throttle revs to the limiter and bounces off it, and it drops into the launch on green.
+- **Racing:** an 8-speed gearbox with hysteresis. Each upshift has a short ignition cut and the revs fall into the next gear. Throttle is read from what the car is doing: full when accelerating, part when holding speed, off when braking or after contact. Lifting at high revs gives overrun crackle, and downshifts blip.
+- **Pit lane:** the limiter's stuttering buzz. In the box the engine idles.
+- **Rivals:** one extra voice follows the nearest car. It gets louder as the car gets closer, pans left/right with its side, and bends in pitch (doppler) as it passes.
 
 ## Controls
 
@@ -135,7 +145,7 @@ Audio starts on the first tap or key press (a browser rule). Toggle it with the 
 | in the box: arrows / swipe | wheel guns, in the direction shown |
 | hold, release on green | launch; releasing on red is a +1 s jump start |
 | Tilt mode | drag, tilt or hold arrows to steer; tap the right edge to boost |
-| M | music on/off |
+| M | sound on/off |
 
 Hit yellow apex rings for +30 boost. Inside lines are shorter.
 

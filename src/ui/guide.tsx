@@ -135,7 +135,7 @@ export function Guide({ close }: { close: () => void }) {
           </li>
         ))}
         <li style={{ fontSize: 13, color: '#8A8A92', lineHeight: 1.5 }}>
-          Tilt mode: tilt or drag to steer, tap the right edge to boost. Press <K>M</K> to toggle music.
+          Tilt mode: tilt or drag to steer, tap the right edge to boost. Press <K>M</K> to toggle sound; music and engine sound have their own switches in Race settings → More.
         </li>
       </ol>
       <div style={{ padding: '12px 24px var(--pad-bottom)', borderTop: '1px solid #1A1A1E' }}>

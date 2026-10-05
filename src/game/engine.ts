@@ -6,6 +6,7 @@ import {
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
+import type { EngineInput } from '../audio/engineSound';
 import {
   PIT, CLIFF, BOX_CALL, PIT_FAST, PIT_WRONG, WHEELS, DIRS, COMPOUNDS, spec, tyrePerf, wearRate, recommend, compoundIndex,
   type Compound, type Wheel, type Dir,
@@ -751,6 +752,33 @@ export class Engine {
       pitStops: pl.stops, bestPit: pl.stops ? pl.bestPit : null, tyres: pl.stints.map(i => spec(i).short).join('-'),
     });
     this.later(() => { this.set({ results, summary }); this.refreshResults(); this.setScreen('results'); }, 1600);
+  }
+
+  // ---------- engine sound ----------
+  private sndV = 0;
+  private sndThr = 0;
+  /** Snapshot for the engine sound: mode, revs input, throttle estimate and the nearest rival. */
+  soundInput(dt: number): EngineInput {
+    const g = this.g, pl = g.player;
+    const off: EngineInput = { mode: 'off', revving: false, v: 0, throttle: 0, boost: false, limiter: false, rival: null };
+    if (!g || (this.screen !== 'lights' && this.screen !== 'race')) { this.sndV = 0; return off; }
+    const moving = g.running && g.t >= pl.startDelay;
+    const mode: EngineInput['mode'] = !moving ? 'grid' : pl.pit === 2 ? 'box' : 'race';
+    // Throttle from what the car is doing: accelerating = flat out, braking = off, holding speed = part throttle.
+    const acc = dt > 0 ? (pl.v - this.sndV) / dt : 0;
+    this.sndV = pl.v;
+    const want = pl.brakeOn || pl.contactT > 0.6 ? 0 : acc > 2 ? 1 : acc < -5 ? 0 : 0.55;
+    this.sndThr += (want - this.sndThr) * Math.min(1, dt * 10);
+    let rival: EngineInput['rival'] = null, best = 70;
+    for (const o of g.cars) {
+      if (o === pl || o.dnf) continue;
+      const gap = o.p - pl.p, dist = Math.hypot(gap, o.d - pl.d);
+      if (dist < best) { best = dist; rival = { gap, side: o.d - pl.d, v: o.v, closing: (gap >= 0 ? 1 : -1) * (pl.v - o.v) }; }
+    }
+    return {
+      mode, revving: mode === 'grid' && this.ui.holding, v: pl.v, throttle: this.sndThr,
+      boost: g.boostT > 0, limiter: pl.pit === 1 || pl.pit === 3, rival,
+    };
   }
 
   /** Team radio line shown on the HUD while a stop makes sense. */
