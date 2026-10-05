@@ -94,7 +94,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Brake', art: <HazardArt />,
-    body: <><Y c="#E10600">Press and hold</Y> the screen (without swiping) to brake. Use it to tuck in behind a car instead of hitting it, then swipe out and pass.</>,
+    body: <><Y c="#E10600">Press and hold</Y> the screen (without swiping) to brake. Use it to tuck in behind a car instead of hitting it. Sit in its tow, then swipe out at the right moment and you might just fly past.</>,
     keys: 'Hold ↓ or S',
   },
   {
