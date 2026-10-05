@@ -7,6 +7,8 @@ import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
 import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, cleanName } from './ui/screens';
+import { TyreSheet, PitStop } from './ui/tyres';
+import { isCompound, type Compound, type Dir } from './game/tyres';
 
 // Storage can throw (blocked cookies / some private modes); the game must still run.
 const ls = {
@@ -28,6 +30,9 @@ export default function App() {
   const [accent, setAccent] = useState(() => +(ls.get('fr-accent') || 0) % ACCENTS.length);
   const [controls, setControls] = useState<Controls>(() => (ls.get('fr-controls') as Controls) || 'swipe');
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
+  const [tyre, setTyre] = useState<Compound>(() => { const v = ls.get('fr-tyre'); return isCompound(v) ? v : 'soft'; });
+  const [showTyres, setShowTyres] = useState(false);
+  const closeTyres = useCallback(() => setShowTyres(false), []);
   const [showSettings, setShowSettings] = useState(false);
   const closeSettings = useCallback(() => setShowSettings(false), []);
   const [showGuide, setShowGuide] = useState(() => { try { return !ls.get('fr-guide-seen') && !location.search.includes('room='); } catch { return false; } });
@@ -61,6 +66,7 @@ export default function App() {
   useEffect(() => { engine.livery = livery; ls.set('fr-livery', livery); }, [engine, livery]);
   useEffect(() => { engine.accent = accent; ls.set('fr-accent', String(accent)); }, [engine, accent]);
   useEffect(() => { engine.controls = controls; ls.set('fr-controls', controls); }, [engine, controls]);
+  useEffect(() => { engine.startCompound = tyre; ls.set('fr-tyre', tyre); }, [engine, tyre]);
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
 
@@ -165,7 +171,7 @@ export default function App() {
     const down = (e: PointerEvent) => {
       ptr = { x: e.clientX, y: e.clientY, moved: false };
       if (screenRef.current === 'lights') engine.throttleDown();
-      if (screenRef.current === 'race') brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
+      if (screenRef.current === 'race' && !engine.pitActive) brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
     };
     const move = (e: PointerEvent) => {
       if (!ptr || screenRef.current !== 'race') return;
@@ -178,6 +184,11 @@ export default function App() {
       if (screenRef.current === 'lights') return engine.throttleUp();
       if (!p || braked || screenRef.current !== 'race') return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y, tilt = engine.controls === 'tilt';
+      // Pit Stop Rush: every swipe is a wheel gun.
+      if (engine.pitActive) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) > 26) engine.pitSwipe(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+        return;
+      }
       if (!tilt && Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy)) engine.lane(Math.sign(dx));
       else if (dy < -34 && Math.abs(dy) > Math.abs(dx)) engine.action();
       else if (tilt && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
@@ -188,9 +199,19 @@ export default function App() {
     const kd = (e: KeyboardEvent) => {
       const s = screenRef.current, k = e.key;
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current && !(e.target as HTMLElement)?.closest?.('button')) return startSolo();
+      if (s === 'garage' && k === 'Enter' && !showSettingsRef.current && !showGuideRef.current && !showTyresRef.current && !(e.target as HTMLElement)?.closest?.('button')) return startSolo();
       if (s === 'lights' && (k === ' ' || k === 'ArrowUp' || k === 'Enter')) { e.preventDefault(); if (!e.repeat) engine.throttleDown(); return; }
       if (s !== 'race') return;
+      if (engine.pitActive) {
+        const dir: Dir | null = k === 'ArrowLeft' || k === 'a' ? 'left' : k === 'ArrowRight' || k === 'd' ? 'right' : k === 'ArrowUp' || k === 'w' ? 'up' : k === 'ArrowDown' || k === 's' ? 'down' : null;
+        if (dir || /^[1-4]$/.test(k) || k === 'Enter' || k === ' ') e.preventDefault();
+        if (e.repeat) return;
+        const pit = engine.ui.pit;
+        if (pit?.phase === 'call' && (k === 'Enter' || k === ' ')) engine.pitCall(pit.rec);
+        else if (/^[1-4]$/.test(k)) engine.pitCall(+k - 1);
+        else if (dir) engine.pitSwipe(dir);
+        return;
+      }
       const tilt = engine.controls === 'tilt';
       if (k === 'ArrowLeft' || k === 'a') { e.preventDefault(); if (tilt) engine.keySteer = -1; else if (!e.repeat) engine.lane(-1); }
       if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); if (tilt) engine.keySteer = 1; else if (!e.repeat) engine.lane(1); }
@@ -228,8 +249,13 @@ export default function App() {
   showSettingsRef.current = showSettings;
   const showGuideRef = useRef(false);
   showGuideRef.current = showGuide;
+  const showTyresRef = useRef(false);
+  showTyresRef.current = showTyres;
 
-  function startSolo() {
+  /** RACE opens the starting-tyre sheet; TO THE GRID starts the race. */
+  function startSolo() { setShowTyres(true); }
+  function goSolo() {
+    setShowTyres(false);
     const s = sessionRef.current;
     if (s) { sessionRef.current = null; engine.net = null; s.leave(); }
     engine.startRace(null);
@@ -265,6 +291,7 @@ export default function App() {
       <div ref={stageRef} className="stage">
         <canvas ref={canvasRef} className="world" />
         {screen === 'race' && <RaceHud ui={ui} tilt={controls === 'tilt'} />}
+        {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={() => engine.g.t} wear={ui.hud.tyre / 100} carColor={engine.g.player.color} call={i => engine.pitCall(i)} />}
         {screen === 'lights' && <Lights ui={ui} />}
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
@@ -276,11 +303,14 @@ export default function App() {
           <RaceSettingsSheet settings={settings} set={setSettings} close={closeSettings} mode={screen === 'lobby' ? 'ROOM · HOST ONLY' : 'SOLO RACE'} />
         )}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}
-        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} />}
+        {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} tyre={tyre} setTyre={setTyre} />}
         {screen === 'results' && (
           <Results ui={ui} mp={mp && !!session}
             toGarage={() => { if (mp && session) leaveRoom(); else { engine.resetRace(); setScreen('garage'); } }}
-            again={() => { if (mp && session) backToLobby(); else engine.startRace(null); }} />
+            again={() => { if (mp && session) backToLobby(); else setShowTyres(true); }} />
+        )}
+        {(screen === 'garage' || screen === 'results') && showTyres && (
+          <TyreSheet value={tyre} set={setTyre} laps={settings.laps} weather={settings.weather} go={goSolo} close={closeTyres} />
         )}
         <ToastView ui={ui} />
       </div>

@@ -77,3 +77,7 @@ button { font: inherit; color: inherit; }
   .garage-hero { min-height: 250px !important; }
 }
 input[type=range] { width: 100%; accent-color: #E10600; height: 28px; }
+
+/* v1.5 tyres & pit stops */
+.pulse { animation: pulse .9s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45 } }
