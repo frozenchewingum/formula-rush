@@ -78,6 +78,18 @@ Hero stage with the 3D car (auto-spin, drag to spin with inertia, a spin kick on
 - **Liveries:** Classic (body team, sidepods team-dark), Split (body team-dark, sidepods + rear endplates team), Stripe (Classic + accent centre stripe), Stealth (carbon body, team colour on front wing and endplates, accent stripe). The accent always paints the helmet, front-wing flap and DRS flap, in the Garage and on track. AI cars keep plain team colours.
 - **Race settings** open as a bottom sheet from the Garage and the Lobby: laps 1 / 3 / 5 / 8 and weather Random / Dry / Wet / Late rain. AI pace and camera tilt sit under *More*. In a room only the host can edit; guests see `SET BY HOST`. The host's changes are written to `fr_rooms` and reach guests through Realtime.
 
+## Acceleration test toggle (hidden)
+
+Three acceleration feels for play-testing (`accelRate` in `src/game/constants.ts`):
+
+| Mode | Feel | 0→300 km/h |
+|---|---|---|
+| **Classic** (default) | constant push, same as before | ~2.8 s |
+| **Curve** | strong out of corners, fades near top speed like air resistance | ~3.6 s |
+| **Gentle** | softer version of Curve | ~4.9 s |
+
+Long-press the **FORMULA RUSH** logo in the Garage (~0.7 s) to cycle modes. The current mode shows under the car when it isn't Classic, and the choice is remembered. `?accel=classic|curve|gentle` in the URL also works. AI cars use the same mode, about 8% softer as before. In a room, each client simulates its own car, and the host's mode drives the AI.
+
 ## Tyres & pit stops
 
 Tyres live in `src/game/tyres.ts`; the engine applies them to every car, AI included.

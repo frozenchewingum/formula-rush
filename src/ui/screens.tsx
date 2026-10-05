@@ -29,7 +29,7 @@ export function Garage(p: {
   team: number; setTeam: (t: number) => void; livery: Livery; setLivery: (l: Livery) => void; accent: number; setAccent: (a: number) => void;
   controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
-  openSettings: () => void; openGuide: () => void; sound: SoundState; armSound: () => void; toggleSound: () => void; busy: string; err: string; pb: number | null; online: boolean;
+  openSettings: () => void; openGuide: () => void; accel: string; secret: () => void; sound: SoundState; armSound: () => void; toggleSound: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt', n = TEAMS.length;
   const [tab, setTab] = useState<GTab>(() => { try { return (sessionStorage.getItem('fr-gtab') as GTab) || 'team'; } catch { return 'team'; } });
@@ -50,7 +50,9 @@ export function Garage(p: {
         <div aria-hidden style={{ ...display, position: 'absolute', left: -10, right: -10, top: '24%', textAlign: 'center', fontWeight: 900, fontStyle: 'italic', fontSize: 118, lineHeight: 1, letterSpacing: '-.01em', color: tm.color, opacity: 0.16, pointerEvents: 'none', whiteSpace: 'nowrap', transition: 'color .3s' }}>{tm.name.toUpperCase()}</div>
         <CarStage paint={paint} style={{ left: 0, right: 0, top: 'calc(var(--pad-top) + 26px)', bottom: 56 }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 'var(--pad-top) 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, pointerEvents: 'none' }}>
-          <div style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 26, lineHeight: 1 }}>FORMULA <span style={{ color: '#E10600' }}>RUSH</span></div>
+          <LongPress onLong={p.secret} style={{ ...display, fontWeight: 900, fontStyle: 'italic', fontSize: 26, lineHeight: 1, pointerEvents: 'auto', userSelect: 'none', WebkitTouchCallout: 'none' } as CSSProperties}>
+            FORMULA <span style={{ color: '#E10600' }}>RUSH</span>
+          </LongPress>
           <div role="radiogroup" aria-label="Controls" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'rgba(26,26,30,.9)', borderRadius: 22, padding: 3, pointerEvents: 'auto' }}>
             {(['swipe', 'tilt'] as Controls[]).map(c => {
               const on = (c === 'tilt') === tilt;
@@ -87,6 +89,7 @@ export function Garage(p: {
             <div style={{ ...mono, fontSize: 11, letterSpacing: '.12em', color: '#8A8A92' }}>#07 · {liveryName(p.livery).toUpperCase()} LIVERY</div>
           </div>
           <div style={{ ...mono, fontSize: 11, textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {p.accel && <span style={{ color: '#A855F7' }}>ACCEL · {p.accel}</span>}
             {p.pb != null && <span style={{ color: '#A855F7' }}>PB {fmt(p.pb)}</span>}
             <span style={{ color: '#5A5A62' }}>DRAG TO SPIN</span>
           </div>
@@ -157,6 +160,19 @@ export function Garage(p: {
           <Btn className="ghost" disabled={!!p.busy || !p.online} onClick={p.openJoin}>Join Room</Btn>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Press and hold for 700 ms (no visible affordance: used for hidden test switches). */
+function LongPress({ onLong, style, children }: { onLong: () => void; style?: CSSProperties; children: ReactNode }) {
+  const timer = useRef(0);
+  const stop = () => clearTimeout(timer.current);
+  return (
+    <div style={style} onContextMenu={e => e.preventDefault()}
+      onPointerDown={() => { stop(); timer.current = window.setTimeout(() => { onLong(); try { navigator.vibrate?.(20); } catch { /* unsupported */ } }, 700); }}
+      onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}>
+      {children}
     </div>
   );
 }

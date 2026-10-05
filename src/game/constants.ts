@@ -82,6 +82,22 @@ export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', a
 
 export const PACE: Record<AiPace, number> = { Easy: 0.9, Normal: 0.955, Hard: 0.995 };
 
+// ---------- Acceleration feel (hidden test toggle: long-press the logo, or ?accel=classic|curve|gentle) ----------
+export type AccelModel = 'classic' | 'curve' | 'gentle';
+export const ACCEL_MODELS: [AccelModel, string][] = [['classic', 'CLASSIC'], ['curve', 'CURVE'], ['gentle', 'GENTLE']];
+export const isAccelModel = (v: unknown): v is AccelModel => ACCEL_MODELS.some(m => m[0] === v);
+/**
+ * Acceleration in units/s² at speed v towards speed cap `top`.
+ * classic: constant (0–300 km/h ≈ 2.8 s). curve/gentle: pulls hard out of corners and fades
+ * near top speed like air resistance (≈ 3.6 s / 4.9 s). AI cars run ~8% softer, as before.
+ */
+export function accelRate(m: AccelModel, player: boolean, v: number, top: number) {
+  const k = player ? 1 : 24 / 26;
+  if (m === 'classic') return 26 * k;
+  const a = m === 'curve' ? 30 : 22, vt = Math.max(86, top * 1.1);
+  return a * k * Math.max(0.08, 1 - (v / vt) ** 2);
+}
+
 export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const wrapA = (a: number) => {
   while (a > Math.PI) a -= 2 * Math.PI;
