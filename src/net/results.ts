@@ -10,6 +10,7 @@ export async function saveResult(f: FinishInfo, roomId: string | null) {
     await supabase.from('fr_race_results').insert({
       room_id: roomId, user_id: userId, position: f.pos, total_time: f.totalTime,
       best_lap: f.bestLap, apexes: f.apexes, contacts: f.contacts,
+      pit_stops: f.pitStops, best_pit: f.bestPit, tyres: f.tyres,
     });
     if (f.bestLap) await supabase.rpc('fr_submit_best_lap', { p_track: TRACK_ID, p_lap: f.bestLap });
   } catch (e) {

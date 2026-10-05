@@ -4,6 +4,8 @@ import {
   liveryName, liveryTile, isLivery, weatherMeta, fmt, type Controls, type Settings, type Weather, type AiPace, type Livery,
 } from '../game/constants';
 import { CarStage } from './CarStage';
+import { TyreDot, TyrePicker } from './tyres';
+import { COMPOUNDS, type Compound } from '../game/tyres';
 import type { UiState } from '../game/engine';
 import type { PlayerRow, RoomSession } from '../net/room';
 
@@ -277,7 +279,7 @@ export function Join(p: { code: string; setCode: (c: string) => void; err: strin
 }
 
 // ---------------- Lobby ----------------
-export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean; openSettings: () => void }) {
+export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void; start: () => void; starting: boolean; openSettings: () => void; tyre: Compound; setTyre: (c: Compound) => void }) {
   const { s } = p, room = s.room!, me = s.me(), host = s.isHost();
   const slots: (PlayerRow | null)[] = [...s.players].sort((a, b) => a.slot - b.slot);
   if (s.players.length < MAX_PLAYERS) slots.push(null);
@@ -334,6 +336,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
           );
         })}
       </div>
+      <TyrePicker value={p.tyre} set={p.setTyre} disabled={racing} />
       <div style={{ fontSize: 14, color: '#8A8A92' }}>{GRID_SIZE}-car grid. AI fills the empty spots and drivers start at the back. {MIN_PLAYERS}+ drivers to race.</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 10 }}>
         <Btn onClick={() => me && s.updateMe({ ready: !me.ready })} disabled={racing} style={{ height: 60, background: me?.ready ? '#22C55E' : '#1A1A1E', color: me?.ready ? '#0E0E11' : '#F2F2F2' }}>{me?.ready ? 'Ready ✓' : 'Ready up'}</Btn>
@@ -397,6 +400,9 @@ export function RaceHud({ ui, tilt }: { ui: UiState; tilt: boolean }) {
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '48px 18px var(--pad-bottom)', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(transparent,rgba(14,14,17,.95) 45%)', pointerEvents: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {h.boxCall && <div className="pulse" style={{ ...chip, background: h.boxCall === 'BOX FOR WETS' ? '#3B6CFF' : '#FFD400', color: h.boxCall === 'BOX FOR WETS' ? '#F2F2F2' : '#0E0E11' }}>{h.boxCall}</div>}
+            {h.pitWindow && <div style={{ ...chip, border: '1.5px solid #FFD400', color: '#FFD400' }}>PIT {tilt ? '· STEER →' : '· SWIPE →'}</div>}
+            {h.limiter && <div style={{ ...chip, background: '#FFD400', color: '#0E0E11' }}>PIT LIMITER</div>}
             {h.drsReady && <div style={{ ...chip, border: '1.5px solid #00D2BE', color: '#00D2BE' }}>DRS READY · ↑</div>}
             {h.drsOn && <div style={{ ...chip, background: '#00D2BE', color: '#0E0E11' }}>DRS OPEN</div>}
             {h.braking && <div style={{ ...chip, background: '#E10600', color: '#F2F2F2' }}>BRAKE</div>}
@@ -405,17 +411,21 @@ export function RaceHud({ ui, tilt }: { ui: UiState; tilt: boolean }) {
           <div style={{ ...mono, fontSize: 28, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{h.kmh}<span style={{ fontSize: 12, color: '#8A8A92' }}> KM/H</span></div>
         </div>
         <Bar label="BOOST" w={h.boost} color={h.boost >= 35 ? '#FFD400' : '#7A6A1A'} tick />
-        <Bar label="TYRES" w={h.tyre} color={h.tyre > 60 ? '#22C55E' : h.tyre > 45 ? '#FFD400' : '#E10600'} />
-        <div style={{ textAlign: 'center', fontSize: 14, color: '#8A8A92' }}>{tilt ? 'tilt or drag to steer · tap right edge to boost · hold to brake' : '← → change line · ↑ DRS / boost · hold to brake'}</div>
+        <Bar label="TYRES" w={h.tyre} color={h.tyre > 50 ? '#22C55E' : h.tyre > 25 ? '#FFD400' : '#E10600'} icon={<TyreDot i={h.tc} size={16} />} />
+        <div style={{ textAlign: 'center', fontSize: 14, color: h.pitWindow ? '#FFD400' : '#8A8A92' }}>
+          {h.pitWindow
+            ? (tilt ? 'steer hard right on the right-hand line to pit' : 'from the right-hand line, swipe → to pit')
+            : tilt ? 'tilt or drag to steer · tap right edge to boost · hold to brake' : '← → change line · ↑ DRS / boost · hold to brake'}
+        </div>
       </div>
     </>
   );
 }
 
-function Bar({ label, w, color, tick }: { label: string; w: number; color: string; tick?: boolean }) {
+function Bar({ label, w, color, tick, icon }: { label: string; w: number; color: string; tick?: boolean; icon?: ReactNode }) {
   return (
     <div style={{ ...mono, display: 'flex', gap: 10, alignItems: 'center', fontSize: 12 }}>
-      <span style={{ width: 48, color: '#A8A8B0' }}>{label}</span>
+      <span style={{ width: 64, color: '#A8A8B0', display: 'flex', alignItems: 'center', gap: 4 }}>{icon}{label}</span>
       <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#2A2A30', position: 'relative' }}>
         <div style={{ width: w + '%', height: '100%', borderRadius: 4, background: color }} />
         {tick && <div style={{ position: 'absolute', left: '35%', top: -2, bottom: -2, width: 2, background: '#0E0E11' }} />}
@@ -436,16 +446,18 @@ export function Results({ ui, mp, toGarage, again }: { ui: UiState; mp: boolean;
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', fontSize: 16, overflowY: 'auto', minHeight: 0 }}>
         {ui.results.map(r => (
-          <div key={r.pos} style={{ display: 'grid', gridTemplateColumns: '28px 6px 1fr auto', gap: 10, alignItems: 'center', padding: '7px 10px', borderRadius: 6, background: r.you ? '#2A0D0C' : 'transparent' }}>
+          <div key={r.pos} style={{ display: 'grid', gridTemplateColumns: '28px 6px 1fr auto auto', gap: 10, alignItems: 'center', padding: '7px 10px', borderRadius: 6, background: r.you ? '#2A0D0C' : 'transparent' }}>
             <span style={{ ...mono, color: '#8A8A92' }}>{r.pos}</span>
             <span style={{ width: 6, height: 18, borderRadius: 2, background: r.color }} />
             <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
+            <TyreStints s={r.tyres} />
             <span style={{ ...mono, fontSize: 13, color: '#A8A8B0' }}>{r.gap}</span>
           </div>
         ))}
       </div>
-      <div style={{ ...mono, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+      <div style={{ ...mono, display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
         <Tile label="BEST LAP" value={sum.best} color="#A855F7" />
+        <Tile label={'PIT · ' + sum.strategy} value={sum.pit} color="#F2F2F2" />
         <Tile label="APEXES" value={sum.apex} color="#FFD400" />
         <Tile label="CONTACTS" value={sum.contacts} color="#E10600" />
       </div>
@@ -455,6 +467,16 @@ export function Results({ ui, mp, toGarage, again }: { ui: UiState; mp: boolean;
         <Btn className="primary" onClick={again} style={{ height: 54, ...display, fontWeight: 800, fontSize: 22 }}>{mp ? 'BACK TO LOBBY' : 'RACE AGAIN'}</Btn>
       </div>
     </div>
+  );
+}
+
+/** Results: one tyre dot per stint, e.g. "S M". */
+function TyreStints({ s }: { s: string }) {
+  const parts = s.split(' ').filter(Boolean);
+  return (
+    <span aria-label={'Tyres ' + parts.join(', ')} style={{ display: 'flex', gap: 2 }}>
+      {parts.map((l, k) => <TyreDot key={k} i={Math.max(0, COMPOUNDS.findIndex(c => c.short === l))} size={16} />)}
+    </span>
   );
 }
 

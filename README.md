@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.4** · Garage v2 (3D car, liveries, accents) and race settings sheet. See [Garage](#garage).
+**v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -17,6 +17,7 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 | <img src="public/guide/drs.webp" width="160" alt="DRS"> | **5. DRS.** On the teal straights, get within a second of the car ahead and **DRS READY** appears. Swipe up to open it. |
 | | **Brake.** Press and hold the screen without swiping (↓ / S on a keyboard) to brake and tuck in behind a car instead of hitting it. |
 | | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
+| | **Tyres & Pit Stop Rush.** Pick Soft, Medium, Hard or Wet before the race. When the team calls **BOX BOX**, get on the right-hand line before the finish and swipe right into the pit lane. In the box, call your next tyres, then swipe each lit wheel in the direction shown. Under 2.0 s earns +25 boost. |
 | | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
 
 The same guide opens in the game on first launch and from the **?** button in the Garage. Clips are real gameplay captured from the game.
@@ -60,7 +61,7 @@ Supabase settings come from `.env.development` / `.env.production` (`VITE_SUPABA
 |---|---|
 | `fr_rooms` | code (unique while `lobby`/`racing`), host, status, laps (1–8), weather |
 | `fr_room_players` | up to 4 per room, `slot` unique per room, team (0–10), livery, accent (0–4), name, ready |
-| `fr_race_results` | one row per driver per finished race |
+| `fr_race_results` | one row per driver per finished race, incl. `pit_stops`, `best_pit` (s) and `tyres` strategy such as `S-M` |
 | `fr_best_laps` | personal best per track (leaderboard, future ghosts) |
 | `fr_profiles` | reserved for named profiles |
 
@@ -77,13 +78,32 @@ Hero stage with the 3D car (auto-spin, drag to spin with inertia, a spin kick on
 - **Liveries:** Classic (body team, sidepods team-dark), Split (body team-dark, sidepods + rear endplates team), Stripe (Classic + accent centre stripe), Stealth (carbon body, team colour on front wing and endplates, accent stripe). The accent always paints the helmet, front-wing flap and DRS flap, in the Garage and on track. AI cars keep plain team colours.
 - **Race settings** open as a bottom sheet from the Garage and the Lobby: laps 1 / 3 / 5 / 8 and weather Random / Dry / Wet / Late rain. AI pace and camera tilt sit under *More*. In a room only the host can edit; guests see `SET BY HOST`. The host's changes are written to `fr_rooms` and reach guests through Realtime.
 
+## Tyres & pit stops
+
+Tyres live in `src/game/tyres.ts`; the engine applies them to every car, AI included.
+
+| Compound | Corner grip (dry / wet) | Top speed | Life |
+|---|---|---|---|
+| Soft | 1.08 / 0.72 | +3.5% | 1.7 laps |
+| Medium | 1.00 / 0.70 | — | 2.6 laps |
+| Hard | 0.94 / 0.68 | −3.5% | 3.1 laps |
+| Wet | 0.86 / 0.97 | −5% | 3.6 laps in rain; wears 2.6× faster in the dry |
+
+- **Wear** is by distance. Boost works the tyres 1.8× harder; contact and walls take a chunk. Grip fades gently to 25%, then falls off a **cliff** (grip down to 62%, top speed down to 82% at 0%). The HUD shows the compound and wear; **BOX BOX** appears under 32%, **BOX FOR WETS / SLICKS** when the weather and tyres don't match.
+- **Starting tyres:** RACE opens a sheet with the four compounds, a recommendation and a strategy hint for the laps and forecast. In a room, each driver picks in the lobby.
+- **Pit lane:** right of the main straight. The pit window is the last ~120 units before the line (highlighted, `PIT · SWIPE →` chip). Swipe right from the right-hand line (Tilt: steer hard right) to commit. Speed limiter 36 (~150 km/h), box just past the line, exit ~90 units later. No pit stop on the final lap. Costs ~4.5 s plus the stop.
+- **Pit Stop Rush:** the race clock keeps running. Call the tyres (the engineer's pick is highlighted; 1–4 on a keyboard), then four wheels light up in random order, each with an arrow: swipe (or press) that way. A wrong swipe adds 0.5 s. Under 2.0 s earns +25 boost. If nobody touches anything, the crew calls the tyres after 6 s and finishes after 12 s.
+- **AI strategy:** AI cars start on a spread of compounds (wets in the rain), stop when their tyres won't make the flag, take 1.9–3.2 s stops and pick the softest compound that lasts. They box for wets when it rains.
+- **Balance** (single car, 2.3 s stops): over 3 laps Soft → Medium is fastest, about 1.5 s ahead of no-stop Hard; 5 laps is a one-stop race and 8 laps a two-stop race. Late rain now arrives a quarter-lap before the final lap so there is a window to box for wets.
+- **Multiplayer:** `state` carries `c` (compound index) and AI tuples carry compound and wear, so every client draws the same tyre colours. The pit lane is just a lateral position, so remote cars appear in it without extra messages.
+
 ## Multiplayer
 
 Client-authoritative for your own car, Supabase Realtime as the relay. Channel `race:{roomId}`:
 
 - **Presence** `{ userId }` shows who is connected. If a player is gone for 8 s the host removes them; if the host is gone, the oldest player claims host.
 - **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`; each grid entry carries the driver's team, livery and accent. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start at the back of the pack in random order (P9–P12 with 4 drivers), as in solo where you start P12; AI takes the other 8–10 spots on the 12-car grid. The host needs at least 2 ready drivers to start.
-- **`state`**: `{ id, t, p, d, v, y, b, r }` in race time. The send rate adapts to room size so the whole room stays inside the Realtime quota: every update is delivered to every other driver, so a room of n drivers costs n·(n−1)·rate messages/second. Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. The host also sends AI cars and their finish times; if the host leaves mid-race the new host takes over the AI.
+- **`state`**: `{ id, t, p, d, v, y, b, r, c }` in race time (`c` = tyre compound). The send rate adapts to room size so the whole room stays inside the Realtime quota: every update is delivered to every other driver, so a room of n drivers costs n·(n−1)·rate messages/second. Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. The host also sends AI cars and their finish times; if the host leaves mid-race the new host takes over the AI.
 - **`finish`**: `{ id, finishTime, best }`. Results update live as drivers cross the line.
 
 Contacts are resolved by each client for its own car only.
@@ -110,6 +130,9 @@ Audio starts on the first tap or key press (a browser rule). Toggle it with the 
 |---|---|
 | ← → / swipe | change racing line (3 lanes) |
 | ↑ / Space / swipe up | DRS when ready, otherwise boost (35 of the meter) |
+| → / swipe right on the right-hand line in the pit window | take the pit lane (Tilt: steer hard right) |
+| in the box: 1–4 / tap | call Soft / Medium / Hard / Wet |
+| in the box: arrows / swipe | wheel guns, in the direction shown |
 | hold, release on green | launch; releasing on red is a +1 s jump start |
 | Tilt mode | drag, tilt or hold arrows to steer; tap the right edge to boost |
 | M | music on/off |

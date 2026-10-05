@@ -1,6 +1,7 @@
 // Hybrid chase/top-down camera rendered with a manual perspective projection on a 2D canvas.
 import { clamp, wrapA } from './constants';
 import { trackAt } from './track';
+import { PIT, spec } from './tyres';
 import type { Engine, Car } from './engine';
 
 type Proj = (wx: number, wy: number) => [number, number, number] | null;
@@ -35,7 +36,8 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
 
   ctx.fillStyle = rain ? '#10261A' : '#16351F';
   ctx.fillRect(0, 0, W, H);
-  const O = [-24, -8.8, -7.5, -7.2, -2.4, -2.2, 2.2, 2.4, 7.2, 7.5, 8.8, 24], NO = O.length;
+  // Offsets 12–15 are the pit lane on the right of the main straight: inner edge, inner line, outer edge, wall.
+  const O = [-24, -8.8, -7.5, -7.2, -2.4, -2.2, 2.2, 2.4, 7.2, 7.5, 8.8, 24, PIT.IN_EDGE, PIT.IN_EDGE + 0.35, PIT.OUT_EDGE, PIT.OUT_EDGE + 0.7], NO = O.length;
   const S = e.drawCache.S || (e.drawCache.S = O.map(() => new Array(T.N).fill(null)));
   const vis = e.drawCache.V || (e.drawCache.V = new Array(T.N).fill(false));
   const range = rain ? 380 : 700;
@@ -63,6 +65,7 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
   for (const i of segs) { quad(2, 9, i, (i + 1) % T.N); ctx.fill(); ctx.stroke(); }
   ctx.fillStyle = 'rgba(0,210,190,.11)';
   for (const i of segs) if (T.drs[i]) { quad(2, 9, i, (i + 1) % T.N); ctx.fill(); }
+  drawPitLane(ctx, e, segs, quad);
   for (const i of segs) {
     const j = (i + 1) % T.N;
     if (T.kerb[i]) {
@@ -158,6 +161,10 @@ function drawCar(ctx: CanvasRenderingContext2D, c: Car, heading: number, wx: num
   poly([[2.3, -0.9], [2.3, 1.5], [-2.9, 1.5], [-2.9, -0.9]], 'rgba(0,0,0,.32)');
   rect(1.15, 2.0, 0.72, 1.28, '#111'); rect(1.15, 2.0, -1.28, -0.72, '#111');
   rect(-2.05, -1.0, 0.72, 1.32, '#111'); rect(-2.05, -1.0, -1.32, -0.72, '#111');
+  // compound band on the outer sidewalls
+  const tc = tyreColor(c);
+  rect(1.2, 1.95, 1.12, 1.28, tc); rect(1.2, 1.95, -1.28, -1.12, tc);
+  rect(-2.0, -1.05, 1.16, 1.32, tc); rect(-2.0, -1.05, -1.32, -1.16, tc);
   poly([[2.45, -0.22], [2.45, 0.22], [0.6, 0.42], [-0.9, 0.72], [-2.0, 0.6], [-2.0, -0.6], [-0.9, -0.72], [0.6, -0.42]], c.color, c.isPlayer ? '#FFFFFF' : null);
   if (c.stripe) rect(-1.9, 2.4, -0.1, 0.1, c.stripe);
   rect(2.2, 2.65, -1.2, 1.2, c.dark);
@@ -180,3 +187,34 @@ function drawCar(ctx: CanvasRenderingContext2D, c: Car, heading: number, wx: num
     ctx.fillStyle = c.helmet; ctx.fill();
   }
 }
+
+type Quad = (o1: number, o2: number, i: number, j: number) => void;
+
+/** Pit lane alongside the main straight: entry ramp, lane, boxes, exit ramp. */
+function drawPitLane(ctx: CanvasRenderingContext2D, e: Engine, segs: number[], quad: Quad) {
+  const T = e.T, g = e.g, half = T.L / 2;
+  const rel = (i: number) => { let s = i * T.step; if (s > half) s -= T.L; return s; };
+  const from = PIT.ENTRY - 14, to = PIT.EXIT + 16;
+  const boxes: number[] = [];
+  for (let b = 0; b < PIT.BOXES; b++) boxes.push(PIT.BOX + b * PIT.SPACING);
+  for (const i of segs) {
+    const s = rel(i), j = (i + 1) % T.N;
+    if (s < from || s > to) continue;
+    const ramp = s < PIT.ENTRY + 4 || s > PIT.EXIT - 4;
+    ctx.fillStyle = '#2B2B30';
+    quad(ramp ? 9 : 12, 14, i, j); ctx.fill();
+    ctx.fillStyle = '#3A3A42'; quad(14, 15, i, j); ctx.fill(); // outer pit wall
+    if (!ramp) { ctx.fillStyle = (i & 1) ? '#F2F2F2' : 'rgba(242,242,242,.4)'; quad(12, 13, i, j); ctx.fill(); }
+    // speed-limit line at the entry and exit
+    if (Math.abs(s - PIT.ENTRY) < T.step / 2 || Math.abs(s - PIT.EXIT) < T.step / 2) { ctx.fillStyle = '#FFD400'; quad(12, 14, i, j); ctx.fill(); }
+    // box markings (yellow outline per slot)
+    if (boxes.some(b => s >= b - 2.4 && s < b + 2.4)) { ctx.fillStyle = 'rgba(255,212,0,.22)'; quad(12, 14, i, j); ctx.fill(); }
+  }
+  // Pit window highlight on the right-hand line while the player can still take the pit lane.
+  if (e.canPit(g.player)) {
+    ctx.fillStyle = 'rgba(255,212,0,.14)';
+    for (const i of segs) { const s = rel(i); if (s >= PIT.WIN_FROM && s <= PIT.ENTRY) { quad(7, 9, i, (i + 1) % T.N); ctx.fill(); } }
+  }
+}
+
+export const tyreColor = (c: Car) => spec(c.tc).color;

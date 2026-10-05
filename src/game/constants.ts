@@ -50,7 +50,7 @@ export const WEATHER_OPTS: [Weather, string, string, string][] = [
   ['Random', 'Random', 'Rain may arrive or clear at any point', '#F2F2F2'],
   ['Dry', 'Dry', 'Full grip all race', '#FFD400'],
   ['Rain', 'Wet', 'Rain from lights out · low grip', '#3B6CFF'],
-  ['Rain on final lap', 'Late rain', 'Dry, then rain on the final lap', '#00D2BE'],
+  ['Rain on final lap', 'Late rain', 'Dry, then rain for the final lap · box for wets', '#00D2BE'],
 ];
 export const weatherMeta = (w: Weather) => WEATHER_OPTS.find(o => o[0] === w) || WEATHER_OPTS[0];
 

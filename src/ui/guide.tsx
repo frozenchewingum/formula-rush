@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { GRID_SIZE, MAX_PLAYERS } from '../game/constants';
+import { COMPOUNDS } from '../game/tyres';
 
 const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
 const display: CSSProperties = { fontFamily: "'Big Shoulders Display', sans-serif" };
@@ -41,8 +42,27 @@ function HazardArt() {
   return (
     <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
       {row('#E10600', 'CONTACT −0.8s', 'cars & walls slow you')}
-      {row('#22C55E', 'TYRES', 'wear down every lap')}
+      {row('#22C55E', 'TYRES', 'wear down · BOX BOX when low')}
       {row('#3B6CFF', 'RAIN', 'less grip, shorter view')}
+    </div>
+  );
+}
+
+function PitArt() {
+  return (
+    <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ ...mono, fontSize: 8, letterSpacing: '.16em', color: '#FFD400' }}>BOX BOX</div>
+      <div style={{ ...mono, fontSize: 22, fontWeight: 700 }}>1.84</div>
+      <div style={{ position: 'relative', width: 70, height: 96 }}>
+        <div style={{ position: 'absolute', left: 25, top: 4, width: 20, height: 88, borderRadius: '7px 7px 4px 4px', background: '#E10600' }} />
+        {[[0, 12, '✓'], [52, 12, '✓'], [0, 62, '↓'], [52, 62, '']].map(([x, y, t], k) => (
+          <div key={k} style={{ position: 'absolute', left: x as number, top: y as number, width: 18, height: 26, borderRadius: 4, ...mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: t === '✓' ? '#22C55E' : '#1A1A1E', color: t === '✓' ? '#0E0E11' : '#FFD400', border: t === '↓' ? '1.5px solid #FFD400' : 'none', boxSizing: 'border-box' }}>{t as string}</div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {COMPOUNDS.map(c => <span key={c.id} style={{ width: 18, height: 18, borderRadius: '50%', border: `3px solid ${c.color}`, boxSizing: 'border-box', ...mono, fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{c.short}</span>)}
+      </div>
     </div>
   );
 }
@@ -80,6 +100,11 @@ const STEPS: Step[] = [
   {
     title: 'Keep it clean', art: <HazardArt />,
     body: <>Hitting cars or the wall scrubs speed. Tyres wear as you race, and when it <Y c="#3B6CFF">rains</Y> you get less grip and see less of the road.</>,
+  },
+  {
+    title: 'Tyres & Pit Stop Rush', art: <PitArt />,
+    body: <>Pick your <Y c="#FF3B30">Soft</Y>, <Y c="#FFD400">Medium</Y>, <Y c="#F2F2F2">Hard</Y> or <Y c="#3B6CFF">Wet</Y> tyres before the race. Softs are fastest but wear out quickly. When the team calls <Y c="#FFD400">BOX BOX</Y>, get on the right-hand line before the finish and <Y c="#F2F2F2">swipe right</Y> into the pit lane. In the box, call your tyres, then swipe each lit wheel the way its arrow points. Under 2 seconds earns boost.</>,
+    keys: '→ to pit · arrows for wheels',
   },
   {
     title: 'Race your friends', art: <RoomArt />,
