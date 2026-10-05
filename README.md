@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -126,13 +126,16 @@ Audio starts on the first tap or key press (a browser rule). Phones only count a
 
 ### Engine sound
 
-`src/audio/engineSound.ts` synthesizes an F1-style turbo V6 on the same audio context (its own bus, so it can be switched off separately from the music). There are no samples.
+`src/audio/engineSound.ts` synthesizes an F1-style turbo V6 on the same audio context, on its own bus so it can be switched off separately from the music. There are no samples.
 
-- **Voice:** a sawtooth at the firing frequency (rpm ÷ 20 for a V6), a half-order square, a detuned saw for roughness and a 2nd-order triangle, soft-clipped and run through a low-pass filter that opens with throttle and revs. Band-passed noise adds intake hiss, and a thin sine a few orders up adds turbo/MGU-K whine (louder on boost).
-- **On the grid:** idle at ~4,200 rpm. Holding the throttle revs to the limiter and bounces off it, and it drops into the launch on green.
-- **Racing:** an 8-speed gearbox with hysteresis. Each upshift has a short ignition cut and the revs fall into the next gear. Throttle is read from what the car is doing: full when accelerating, part when holding speed, off when braking or after contact. Lifting at high revs gives overrun crackle, and downshifts blip.
-- **Pit lane:** the limiter's stuttering buzz. In the box the engine idles.
-- **Rivals:** one extra voice follows the nearest car. It gets louder as the car gets closer, pans left/right with its side, and bends in pitch (doppler) as it passes.
+- **Combustion pulses, not oscillators** (`engineWorklet.ts`, an AudioWorklet): every cylinder firing is its own exhaust bang, a sharp click plus a short burst of noise. Six cylinders fire three times per revolution. Each cylinder is slightly stronger or weaker than the others, and each firing varies a little in timing and strength (more at low revs and on a closed throttle). The pulse train rings through two exhaust-pipe resonances (comb filters). That unevenness is what makes it sound mechanical rather than synthetic. Loudness is normalised for revs, so it follows the throttle.
+- **Tone:** a low body resonance (~170 Hz), a presence bump for rasp (~2.6 kHz), light saturation and a low-pass that opens with throttle. There's quiet intake rush, a faint turbo/MGU-K whine on boost, and two short stereo reflections so the car sits in a space.
+- **Road and wind:** low tyre rumble and a wind band that rise with speed.
+- **On the grid:** a lumpy idle at ~4,200 rpm. Holding the throttle revs to the limiter, where the ignition cuts in and out, then it drops into the launch on green.
+- **Racing:** an 8-speed gearbox with hysteresis and a short ignition cut on each upshift. Downshifts blip. Throttle is read from what the car is doing (accelerating / holding speed / braking or contact). Lifting off gives weak, uneven pulses with occasional overrun bangs.
+- **Pit lane:** the limiter's on/off stutter, then idle in the box.
+- **Rivals:** one extra engine voice follows the nearest car. It gets louder and brighter as the car closes in, pans to its side, and bends in pitch (doppler) as it passes.
+- **Fallback:** browsers without AudioWorklet get the older oscillator voice.
 
 ## Controls
 
