@@ -41,7 +41,7 @@ function HazardArt() {
   );
   return (
     <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
-      {row('#E10600', 'CONTACT', 'cars & walls slow you')}
+      {row('#E10600', 'CONTACT', 'cars & grass slow you')}
       {row('#22C55E', 'TYRES', 'they won’t last forever')}
       {row('#3B6CFF', 'RAIN', 'everything gets harder')}
     </div>
@@ -99,7 +99,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Keep it clean', art: <HazardArt />,
-    body: <>Hitting cars or the wall costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
+    body: <>Hitting cars or running onto the grass costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
   },
   {
     title: 'Tyres & Pit Stop Rush', art: <PitArt />,
