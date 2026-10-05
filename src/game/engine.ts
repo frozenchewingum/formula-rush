@@ -30,6 +30,8 @@ export type Car = {
   stops: number; bestPit: number; stints: number[]; boxCalled: boolean; failCalled: boolean;
   /** AI boost (Hard / Expert, v1.17): meter 0–100 earned at apexes, seconds of boost left, next defend check. */
   ab: number; abT: number; defT: number;
+  /** Next check for giving way to a faster human behind (v1.19). */
+  yT: number;
 };
 type Snap = { t: number; p: number; d: number; v: number; y: number };
 
@@ -102,6 +104,8 @@ type Game = {
   lapStart: number; best: number; apexHits: number; apexTotal: number; contacts: number;
   skill: number; ai: AiProfile; camH: number; fov: number; shake: number; rainWas: boolean;
   rainPlan: [number, number][]; startSlot: number; finishedAt: number;
+  /** Slingshot: seconds left, and the car you were towing behind (v1.19). */
+  slingT: number; towCar: Car | null;
 };
 
 /** Launch grades: seconds from green to letting go, the auto-launch time and the bog-down penalty. */
@@ -195,8 +199,9 @@ export class Engine {
     else {
       // AI: one car per team (your teammate included), so every team shows up once.
       const ti = this.team, pool = shuffle(TEAMS.map((_, t) => t)).slice(0, GRID_SIZE - 1);
-      const teams = [...pool.slice(0, GRID_SLOT), ti, ...pool.slice(GRID_SLOT)];
-      grid = teams.map((t, i) => i === GRID_SLOT
+      const slot = clamp(Math.round(ai.start), 0, GRID_SIZE - 1);
+      const teams = [...pool.slice(0, slot), ti, ...pool.slice(slot)];
+      grid = teams.map((t, i) => i === slot
         ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
         : { team: t, userId: null, base: aiBase(i, ai) });
     }
@@ -220,7 +225,7 @@ export class Engine {
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
         pit: 0, lineP: 0, boxP: 0, outP: 0, pitHold: 0, pitT0: 0, pitChecked: -1,
         stops: 0, bestPit: 0, stints: [], boxCalled: false, failCalled: false,
-        ab: 20, abT: 0, defT: Math.random(),
+        ab: 20, abT: 0, defT: Math.random(), yT: Math.random() * 0.5,
       };
     });
     for (const c of cars) c.stints.push(c.tc);
@@ -234,11 +239,11 @@ export class Engine {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
       skill: ai.skill, ai, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
-      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0,
+      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0, slingT: 0, towCar: null,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
     this.keySteer = 0; this.dragSteer = 0; this.brakeKey = false; this.brakeTouch = false;
-    this.set({ hud: emptyHud(laps, player.tc), pit: null });
+    this.set({ hud: { ...emptyHud(laps, player.tc), pos: cars.indexOf(player) + 1 }, pit: null });
   }
 
   startRace(mp: MpStart | null = null) {
@@ -372,6 +377,14 @@ export class Engine {
       if (gap > 0 && gap < bg && Math.abs(o.d - c.d) < lat) { bg = gap; best = o; }
     }
     return best ? { car: best, gap: bg } : null;
+  }
+  /** AI `c` moves to a free line away from `from` (and stops defending for a moment). */
+  private giveWay(c: Car, from: Car) {
+    const cur = Math.round(c.dTarget / LANE), them = Math.round(from.dTarget / LANE);
+    const opts = [-1, 0, 1].filter(l => l !== cur && l !== them).concat([-1, 0, 1].filter(l => l !== cur && l === them));
+    for (const l of opts) {
+      if (this.laneFree(c, l * LANE) && !this.makesWall(c, l * LANE)) { c.dTarget = l * LANE; c.defT = 2.5; return; }
+    }
   }
   private laneFree(c: Car, d: number) {
     for (const o of this.g.cars) {
@@ -550,8 +563,9 @@ export class Engine {
       if (c.isPlayer && !c.pit) {
         if (g.boostT > 0) mult *= 1.25;
         if (g.drsOn) mult *= 1.12;
-        if (g.slip) mult *= 1.06;
-        if (c.contactT > 0.5) mult *= 0.7;
+        if (g.slip) mult *= g.ai.slip;
+        if (g.slingT > 0) mult *= g.ai.sling[0];
+        if (c.contactT > 0.5) mult *= g.ai.bump[1];
       } else if (!c.isPlayer) {
         // Hard / Expert AI open DRS within a second of the car ahead; Normal+ take a tow.
         const live = !c.pit && started && !c.finished;
@@ -563,7 +577,7 @@ export class Engine {
         c.boostOn = live && c.abT > 0;
         if (c.boostOn) mult *= 1.25;
         if (c.abT > 0) c.abT -= dt;
-        else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl && sl.gap > 6) mult *= 1.06; }
+        else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl && sl.gap > 6) mult *= g.ai.slip; }
       }
       if (c.pit) vmax = Math.min(vmax, VMAX);
       let target = started ? Math.min(vmax, Math.sqrt(G / Math.max(T.ka[c.i], 1e-4))) * mult : 0;
@@ -604,11 +618,17 @@ export class Engine {
           const cover = chaser ? Math.round(chaser.dTarget / L) * L : 0;
           if (chaser && Math.random() < g.ai.defend && Math.abs(cover) <= L && this.laneFree(c, cover) && !this.makesWall(c, cover)) c.dTarget = cover;
         }
+        // Giving way: a clearly faster human closing in on the same line → step aside, more readily on easier levels.
+        if (g.ai.yield && started && !c.finished && (c.yT -= dt) <= 0) {
+          c.yT = 0.5;
+          const fast = g.cars.find(o => !o.ai && !o.pit && !o.finished && c.p - o.p > 5 && c.p - o.p < 28 && Math.abs(o.d - c.d) < 2.3 && o.v > c.v + 2);
+          if (fast && Math.random() < g.ai.yield) this.giveWay(c, fast);
+        }
       }
       c.v += clamp(target - c.v, -75 * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * (c.isPlayer ? 1 : g.ai.accel / (24 / 26)) * dt);
       const prevD = c.d;
       const wets = spec(c.tc).id === 'wet';
-      const lr = c.isPlayer ? 16 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;
+      const lr = c.isPlayer ? 21 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;
       c.d += clamp(c.dTarget - c.d, -lr * dt, lr * dt);
       if (c.isPlayer && rain && !c.pit) c.d += Math.sin(g.t * 1.7) * (wets ? 0.35 : 0.9) * dt;
       const prevP = c.p;
@@ -772,7 +792,16 @@ export class Engine {
     if (g.drsOn && !inZone) g.drsOn = false;
     g.drsReady = inZone && !g.drsOn && gapT < 1.0 && pl.p > 0 && !pl.pit;
     const sl = this.carAhead(pl, 30, 1.6);
+    const wasSlip = g.slip;
     g.slip = !!(sl && sl.gap > 6);
+    if (g.slip) g.towCar = sl!.car;
+    else if (wasSlip && g.towCar) {
+      // Pulled out of the tow with the car still just ahead: slingshot past it.
+      const o = g.towCar, gap = o.p - pl.p;
+      if (gap > 0 && gap < 36 && Math.abs(o.d - pl.dTarget) >= 1.6 && !pl.pit) { g.slingT = g.ai.sling[1]; this.toast('SLINGSHOT', '#00D2BE'); }
+      g.towCar = null;
+    }
+    if (g.slingT > 0) g.slingT -= dt;
     if (g.boostT > 0) g.boostT -= dt;
     // Team radio: worn tyres with laps still to run.
     if (!pl.boxCalled && !pl.pit && pl.wear < BOX_CALL && this.lapsAfterLine(pl.p) >= 1) {
@@ -786,7 +815,11 @@ export class Engine {
       if (o === pl || pl.contactT > 0 || o.pit || Math.abs(o.d) > HALF + 0.5) continue;
       const dp = o.p - pl.p, dd = Math.abs(o.d - pl.d);
       if (Math.abs(dp) < 4.8 && dd < 2.05) {
-        if (dp > 1.5) pl.v = Math.min(pl.v, o.v * 0.72);
+        if (dp > 1.5) {
+          pl.v = Math.min(pl.v, o.v * g.ai.bump[0]);
+          // Easier AI shuffle aside after a tap from behind.
+          if (o.ai && !o.remote && Math.random() < g.ai.yield) this.giveWay(o, pl);
+        }
         else {
           pl.v *= 0.88;
           if (!o.remote) o.v *= 0.9;
