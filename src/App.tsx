@@ -384,7 +384,7 @@ export default function App() {
     <div className="page">
       <div ref={stageRef} className="stage">
         <canvas ref={canvasRef} className="world" />
-        {screen === 'race' && <RaceHud ui={ui} tilt={controls === 'tilt'} onPause={mp ? undefined : () => engine.setPaused(true)} />}
+        {screen === 'race' && <RaceHud ui={ui} engine={engine} tilt={controls === 'tilt'} onPause={mp ? undefined : () => engine.setPaused(true)} />}
         {screen === 'race' && ui.paused && (
           <PauseMenu resume={() => engine.setPaused(false)} restart={() => engine.startRace(null)}
             exit={() => { engine.setPaused(false); engine.resetRace(); setScreen('garage'); }} />

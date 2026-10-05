@@ -6,7 +6,8 @@ import {
 import { CarStage } from './CarStage';
 import { TyreDot, TyrePicker } from './tyres';
 import { COMPOUNDS, type Compound } from '../game/tyres';
-import type { UiState } from '../game/engine';
+import type { UiState, Engine } from '../game/engine';
+import { MiniMap } from './minimap';
 import type { SoundState } from '../audio/music';
 import type { PlayerRow, RoomSession } from '../net/room';
 
@@ -460,7 +461,7 @@ export function Lights({ ui }: { ui: UiState }) {
 }
 
 // ---------------- Race HUD ----------------
-export function RaceHud({ ui, tilt, onPause }: { ui: UiState; tilt: boolean; onPause?: () => void }) {
+export function RaceHud({ ui, tilt, onPause, engine }: { ui: UiState; tilt: boolean; onPause?: () => void; engine?: Engine }) {
   const h = ui.hud;
   const chip: CSSProperties = { ...mono, padding: '5px 9px', borderRadius: 4, fontSize: 11, fontWeight: 700 };
   return (
@@ -477,6 +478,7 @@ export function RaceHud({ ui, tilt, onPause }: { ui: UiState; tilt: boolean; onP
           {h.rain && <div style={{ ...mono, padding: '4px 10px', borderRadius: 4, background: '#3B6CFF', fontSize: 12, fontWeight: 700 }}>RAIN · GRIP LOW</div>}
         </div>
         <div style={{ ...mono, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+          {engine && <MiniMap engine={engine} />}
           <div style={{ fontSize: 16 }}>LAP {h.lap}/{h.laps}</div>
           <div style={{ fontSize: 14 }}>{h.time}</div>
           <div style={{ fontSize: 12, color: '#A855F7' }}>BEST {h.best}</div>
