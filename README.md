@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -76,7 +76,7 @@ RLS: signed-in users read everything and write only their own rows. Room members
 Hero stage with the 3D car (auto-spin, drag to spin with inertia, a spin kick on every team or livery change), the team name ghosted behind it and ‹ › team arrows. Below it: **TEAM / LIVERY / ACCENT** tabs, the race settings bar, **RACE** (solo vs AI) and **Create Room / Join Room**.
 
 - **Liveries:** Classic (body team, sidepods team-dark), Split (body team-dark, sidepods + rear endplates team), Stripe (Classic + accent centre stripe), Stealth (carbon body, team colour on front wing and endplates, accent stripe). The accent always paints the helmet, front-wing flap and DRS flap, in the Garage and on track. AI cars keep plain team colours.
-- **Race settings** open as a bottom sheet from the Garage and the Lobby: laps 1 / 3 / 5 / 8 and weather Random / Dry / Wet / Late rain. AI pace and camera tilt sit under *More*. In a room only the host can edit; guests see `SET BY HOST`. The host's changes are written to `fr_rooms` and reach guests through Realtime.
+- **Race settings** open as a bottom sheet from the Garage and the Lobby: laps 1 / 3 / 5 / 8 and weather Random / Dry / Wet / Late rain. AI difficulty (Easy / Normal / Hard / Expert, see [AI difficulty](#ai-difficulty)) and camera tilt sit under *More*. In a room only the host can edit; guests see `SET BY HOST`. The host's changes are written to `fr_rooms` and reach guests through Realtime.
 
 ## Acceleration feel
 
@@ -175,4 +175,18 @@ Audio starts on the first tap or key press (a browser rule). Phones only count a
 
 Hit yellow apex rings for +30 boost. Inside lines are shorter.
 
-Settings (gear icon in the Garage): camera tilt 35–90°, weather (Random / Dry / Rain / Rain on final lap), AI pace, laps 1–5.
+Settings (gear icon in the Garage): camera tilt 35–90°, weather (Random / Dry / Rain / Rain on final lap), AI difficulty, laps 1–5.
+
+### AI difficulty
+
+Set in `AI` (`src/game/constants.ts`). In rooms the host's level travels with the start message, so every client runs the same AI.
+
+| | Easy | Normal | Hard | Expert |
+|---|---|---|---|---|
+| Top speed vs you | 88% | 94.5% | 98.5% | 101.5% |
+| Cornering grip vs you | 92% | 97% | 100% | 104% |
+| Takes the racing line | 25% | 55% | 80% | 95% |
+| Launch reaction | 0.35–0.75 s | 0.15–0.45 s | 0.10–0.28 s | 0.06–0.16 s |
+| Slipstream / DRS | – / – | ✓ / – | ✓ / ✓ | ✓ / ✓ |
+
+Rough guide from a scripted driver (3 laps, dry, one stop): Easy is a near-certain win, Normal a podium, Hard mid-pack unless you work boost and apexes, Expert wins only on a clean race with boost, apexes and DRS.

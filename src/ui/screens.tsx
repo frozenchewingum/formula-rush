@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   TEAMS, CODE_ABC, GRID_SIZE, MAX_PLAYERS, MIN_PLAYERS, ACCENTS, LIVERIES, LAP_OPTS, WEATHER_OPTS,
-  liveryName, liveryTile, isLivery, weatherMeta, fmt, type Controls, type Settings, type Weather, type AiPace, type Livery,
+  liveryName, liveryTile, isLivery, weatherMeta, fmt, type Controls, type Settings, type Weather, type AiPace, type Livery, aiProfile, AI_LEVELS,
 } from '../game/constants';
 import { CarStage } from './CarStage';
 import { TyreDot, TyrePicker } from './tyres';
@@ -287,19 +287,20 @@ export function RaceSettingsSheet({ settings, set, close, mode, audio }: { setti
           </div>
         </div>
         <button type="button" className="back" onClick={() => setMore(m => !m)} aria-expanded={more} style={{ alignSelf: 'stretch', justifyContent: 'space-between', fontSize: 11, letterSpacing: '.2em', color: '#8A8A92', minHeight: 32 }}>
-          <span>MORE · AI PACE, CAMERA &amp; SOUND</span><span>{more ? '−' : '+'}</span>
+          <span>MORE · AI DIFFICULTY, CAMERA &amp; SOUND</span><span>{more ? '−' : '+'}</span>
         </button>
         {more && (
           <>
-            <div role="radiogroup" aria-label="AI pace" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#1E1E22', borderRadius: 10, padding: 4, marginTop: -8 }}>
-              {(['Easy', 'Normal', 'Hard'] as AiPace[]).map(a => {
+            <div role="radiogroup" aria-label="AI difficulty" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: '#1E1E22', borderRadius: 10, padding: 4, marginTop: -8 }}>
+              {AI_LEVELS.map((a: AiPace) => {
                 const on = settings.aiPace === a;
                 return (
                   <button type="button" role="radio" aria-checked={on} key={a} onClick={() => set({ ...settings, aiPace: a })}
-                    style={{ minHeight: 40, borderRadius: 8, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>{a} AI</button>
+                    style={{ minHeight: 40, borderRadius: 8, border: 0, background: on ? '#F2F2F2' : 'transparent', color: on ? '#0E0E11' : '#A8A8B0', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>{a}</button>
                 );
               })}
             </div>
+            <div style={{ ...mono, fontSize: 11, color: '#8A8A92', letterSpacing: '.04em', marginTop: -6 }}>{aiProfile(settings.aiPace).blurb.toUpperCase()}</div>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ ...label, display: 'flex', justifyContent: 'space-between' }}><span>CAMERA TILT</span><span style={{ color: '#F2F2F2' }}>{settings.cameraTilt}°</span></span>
               <input type="range" min={35} max={90} step={1} value={settings.cameraTilt} onChange={e => set({ ...settings, cameraTilt: +e.target.value })} />

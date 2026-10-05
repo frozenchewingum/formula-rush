@@ -238,6 +238,7 @@ export class RoomSession implements NetLink {
       lightsDelay,
       greenAt: this.serverNow() + 1500 + 4 * 700 + lightsDelay,
       hostId: this.myId,
+      ai: settings.aiPace,
     };
     this.ch?.send({ type: 'broadcast', event: 'start', payload: msg });
     this.h.onStart(msg);
