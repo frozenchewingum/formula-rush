@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -101,12 +101,12 @@ Tyres live in `src/game/tyres.ts`; the engine applies them to every car, AI incl
 | Hard | 0.94 / 0.68 | −3.5% | 3.1 laps |
 | Wet | 0.86 / 0.97 | −5% | 3.6 laps in rain; wears 2.6× faster in the dry |
 
-- **Wear** is by distance. Boost works the tyres 1.8× harder; contact and walls take a chunk. Grip fades gently to 25%, then falls off a **cliff** (grip down to 62%, top speed down to 82% at 0%). The HUD shows the compound and wear; **BOX BOX** appears under 32%, **BOX FOR WETS / SLICKS** when the weather and tyres don't match.
+- **Wear** is by distance. Boost works the tyres 1.8× harder; contact and walls take a chunk. Grip fades gently to 25%, then falls off a **cliff** (grip down to 50%, top speed down to 76%). Under 2% the tyre **fails**: the car limps at about half speed (~180 km/h cap) until it pits, with a red **TYRE FAILURE · BOX** call. The HUD shows the compound and wear; **BOX BOX** appears under 32%, **BOX FOR WETS / SLICKS** when the weather and tyres don't match.
 - **Starting tyres:** RACE opens a sheet with the four compounds, a recommendation and a strategy hint for the laps and forecast. In a room, each driver picks in the lobby.
-- **Pit lane:** right of the main straight. The pit window is the last ~120 units before the line (highlighted, `PIT · SWIPE →` chip). Swipe right from the right-hand line (Tilt: steer hard right) to commit. Speed limiter 36 (~150 km/h), box just past the line, exit ~90 units later. No pit stop on the final lap. Costs ~4.5 s plus the stop.
+- **Pit lane:** right of the main straight. The pit window is the last ~120 units before the line (highlighted, `PIT · SWIPE →` chip). Swipe right from the right-hand line (Tilt: steer hard right) to commit. Speed limiter 44 (~180 km/h), box just past the line, exit ~90 units later. No pit stop on the final lap. Costs ~3.5 s plus the stop.
 - **Pit Stop Rush:** the race clock keeps running. Call the tyres (the engineer's pick is highlighted; 1–4 on a keyboard), then four wheels light up in random order, each with an arrow: swipe (or press) that way. A wrong swipe adds 0.5 s. Under 2.0 s earns +25 boost. If nobody touches anything, the crew calls the tyres after 6 s and finishes after 12 s.
 - **AI strategy:** AI cars start on a spread of compounds (wets in the rain), stop when their tyres won't make the flag, take 1.9–3.2 s stops and pick the softest compound that lasts. They box for wets when it rains.
-- **Balance** (single car, 2.3 s stops): over 3 laps Soft → Medium is fastest, about 1.5 s ahead of no-stop Hard; 5 laps is a one-stop race and 8 laps a two-stop race. Late rain now arrives a quarter-lap before the final lap so there is a window to box for wets.
+- **Balance** (v1.9, checked with 24 simulated 12-car races per strategy, test car at the player's top speed, no boost, starting last). Over 3 laps: Soft or Medium with one stop finishes ~P6–7; Hard with no stop ~P6, but only if you drive cleanly (it reaches the flag at ~3% wear, so contacts or boost tip it into failure); Medium or Soft with no stop finishes last. Before v1.9, Medium with no stop (P4.5) beat pitting (P6.6). Single car, no traffic: Soft → Medium 88.4 s, Hard no-stop 91.4 s, Medium no-stop 96.4 s, Soft no-stop 107 s. Late rain arrives a quarter-lap before the final lap so there is a window to box for wets.
 - **Multiplayer:** `state` carries `c` (compound index) and AI tuples carry compound and wear, so every client draws the same tyre colours. The pit lane is just a lateral position, so remote cars appear in it without extra messages.
 
 ## Multiplayer

@@ -27,6 +27,8 @@ export const isCompound = (v: unknown): v is Compound => COMPOUNDS.some(c => c.i
 export const CLIFF = 0.25;
 /** Show BOX BOX once tyres drop under this. */
 export const BOX_CALL = 0.32;
+/** Below this the tyre has failed: the car limps until it pits (v1.9). */
+export const FAILED = 0.02;
 
 /** Wear multiplier for the conditions: wets overheat on a dry track, slicks run cool in the rain. */
 export function wearRate(i: number, rain: boolean) {
@@ -39,9 +41,11 @@ export function wearRate(i: number, rain: boolean) {
 export function tyrePerf(i: number, wear: number, rain: boolean) {
   const s = spec(i), w = Math.max(0, Math.min(1, wear));
   const base = rain ? s.wetGrip : s.dryGrip;
+  // A worn-out tyre has failed: the car limps (about half speed) until it pits.
+  if (w < FAILED) return { grip: base * 0.4, speed: s.speed * 0.55, steer: 0.5 };
   // Gentle fade down to the cliff, then a steep drop.
-  const fade = w >= CLIFF ? 0.92 + 0.08 * (w - CLIFF) / (1 - CLIFF) : 0.62 + 0.3 * (w / CLIFF);
-  const vfade = w >= CLIFF ? 0.97 + 0.03 * (w - CLIFF) / (1 - CLIFF) : 0.82 + 0.15 * (w / CLIFF);
+  const fade = w >= CLIFF ? 0.92 + 0.08 * (w - CLIFF) / (1 - CLIFF) : 0.5 + 0.42 * (w / CLIFF);
+  const vfade = w >= CLIFF ? 0.97 + 0.03 * (w - CLIFF) / (1 - CLIFF) : 0.76 + 0.21 * (w / CLIFF);
   return { grip: base * fade, speed: s.speed * vfade, steer: 0.7 + 0.3 * fade };
 }
 
@@ -63,7 +67,7 @@ export const PIT = {
   BOX: 24, BOXES: 4, SPACING: 7,
   EXIT: 88,
   /** Lateral position of the pit lane and the limiter speed. */
-  D: 11, LIMIT: 36,
+  D: 11, LIMIT: 44,
   /** Pit lane edges for drawing. */
   IN_EDGE: 9.2, OUT_EDGE: 13.4,
 } as const;
