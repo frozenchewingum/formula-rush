@@ -7,7 +7,7 @@ import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
 import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, PauseMenu, CarSheet, cleanName } from './ui/screens';
-import { TyreSheet, PitStop } from './ui/tyres';
+import { TyreSheet, PitStop, NextTyreStrip } from './ui/tyres';
 import { isCompound, type Compound, type Dir } from './game/tyres';
 
 // Storage can throw (blocked cookies / some private modes); the game must still run.
@@ -246,7 +246,10 @@ export default function App() {
     if (!el) return;
     // Press and hold still for 150 ms = brake; moving more than 14 px first makes it a swipe/drag.
     let ptr: { x: number; y: number; moved: boolean } | null = null, brakeTimer = 0;
+    // Taps on the next-tyre strip (and other data-noswipe controls) never steer, brake or boost.
+    const noSwipe = (e: Event) => !!(e.target as HTMLElement)?.closest?.('[data-noswipe]');
     const down = (e: PointerEvent) => {
+      if (noSwipe(e)) return;
       ptr = { x: e.clientX, y: e.clientY, moved: false };
       if (screenRef.current === 'lights') engine.throttleDown();
       if (screenRef.current === 'race' && !engine.pitActive && !engine.paused) brakeTimer = window.setTimeout(() => { if (ptr && !ptr.moved) engine.brakeTouch = true; }, 150);
@@ -287,12 +290,11 @@ export default function App() {
         const dir: Dir | null = k === 'ArrowLeft' || k === 'a' ? 'left' : k === 'ArrowRight' || k === 'd' ? 'right' : k === 'ArrowUp' || k === 'w' ? 'up' : k === 'ArrowDown' || k === 's' ? 'down' : null;
         if (dir || /^[1-4]$/.test(k) || k === 'Enter' || k === ' ') e.preventDefault();
         if (e.repeat) return;
-        const pit = engine.ui.pit;
-        if (pit?.phase === 'call' && (k === 'Enter' || k === ' ')) engine.pitCall(pit.rec);
-        else if (/^[1-4]$/.test(k)) engine.pitCall(+k - 1);
-        else if (dir) engine.pitSwipe(dir);
+        if (dir) engine.pitSwipe(dir);
         return;
       }
+      // 1–4: next tyres (Soft / Medium / Hard / Wet).
+      if (/^[1-4]$/.test(k)) { engine.setNextTyre(+k - 1); return; }
       const tilt = engine.controls === 'tilt';
       if (k === 'ArrowLeft' || k === 'a') { e.preventDefault(); if (tilt) engine.keySteer = -1; else if (!e.repeat) engine.lane(-1); }
       if (k === 'ArrowRight' || k === 'd') { e.preventDefault(); if (tilt) engine.keySteer = 1; else if (!e.repeat) engine.lane(1); }
@@ -385,7 +387,8 @@ export default function App() {
           <PauseMenu resume={() => engine.setPaused(false)} restart={() => engine.startRace(null)}
             exit={() => { engine.setPaused(false); engine.resetRace(); setScreen('garage'); }} />
         )}
-        {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={() => engine.g.t} wear={ui.hud.tyre / 100} carColor={engine.g.player.color} call={i => engine.pitCall(i)} />}
+        {screen === 'race' && !ui.pit && !ui.paused && <NextTyreStrip current={ui.hud.tc} next={ui.hud.nextTc} set={i => engine.setNextTyre(i)} rain={ui.hud.rain} />}
+        {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={() => engine.g.t} wear={ui.hud.tyre / 100} carColor={engine.g.player.color} />}
         {screen === 'lights' && <Lights ui={ui} />}
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
