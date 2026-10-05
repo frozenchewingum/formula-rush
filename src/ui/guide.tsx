@@ -103,8 +103,8 @@ const STEPS: Step[] = [
   },
   {
     title: 'Tyres & Pit Stop Rush', art: <PitArt />,
-    body: <>Pick your <Y c="#FF3B30">Soft</Y>, <Y c="#FFD400">Medium</Y>, <Y c="#F2F2F2">Hard</Y> or <Y c="#3B6CFF">Wet</Y> tyres before the race. Softs are fastest but wear out quickly. When the team calls <Y c="#FFD400">BOX BOX</Y>, get on the right-hand line before the finish and <Y c="#F2F2F2">swipe right</Y> into the pit lane. Pick your next tyres any time from the NEXT strip on the right. In the box, swipe every wheel's arrow in any order. Under 2 seconds earns boost.</>,
-    keys: '→ to pit · 1–4 next tyres · arrows for wheels',
+    body: <>Pick your <Y c="#FF3B30">Soft</Y>, <Y c="#FFD400">Medium</Y>, <Y c="#F2F2F2">Hard</Y> or <Y c="#3B6CFF">Wet</Y> tyres before the race. Softs are fastest but wear out quickly. When the team calls <Y c="#FFD400">BOX BOX</Y>, get on the right-hand line before the finish and <Y c="#F2F2F2">swipe right</Y> into the pit lane. Pick your next tyres any time from the NEXT strip on the right. In the box, tap each wheel twice in any order: gun off, then gun on once it glows yellow. Under 2 seconds earns boost.</>,
+    keys: '→ to pit · 1–4 next tyres · Q E Z C wheels',
   },
   {
     title: 'Race your friends', art: <RoomArt />,

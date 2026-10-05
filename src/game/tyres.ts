@@ -79,4 +79,5 @@ export const DIRS: Dir[] = ['up', 'down', 'left', 'right'];
 export const DIR_ARROW: Record<Dir, string> = { up: '↑', down: '↓', left: '←', right: '→' };
 export const WHEEL_NAME: Record<Wheel, string> = { FL: 'FRONT LEFT', FR: 'FRONT RIGHT', RL: 'REAR LEFT', RR: 'REAR RIGHT' };
 /** Stop time grades. */
-export const PIT_FAST = 2.0, PIT_GOOD = 2.8, PIT_WRONG = 0.5;
+/** Stop time grades (s), the penalty for a mistimed tap, and how long the crew takes to swap a tyre. */
+export const PIT_FAST = 2.0, PIT_GOOD = 2.8, PIT_WRONG = 0.3, PIT_SWAP = 0.3;

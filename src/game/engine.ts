@@ -8,8 +8,8 @@ import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
 import type { EngineInput } from '../audio/engineSound';
 import {
-  PIT, CLIFF, BOX_CALL, FAILED, PIT_FAST, PIT_GOOD, PIT_WRONG, WHEELS, DIRS, COMPOUNDS, spec, tyrePerf, wearRate, recommend, compoundIndex,
-  type Compound, type Dir,
+  PIT, CLIFF, BOX_CALL, FAILED, PIT_FAST, PIT_GOOD, PIT_WRONG, PIT_SWAP, COMPOUNDS, spec, tyrePerf, wearRate, recommend, compoundIndex,
+  type Compound,
 } from './tyres';
 
 export type Screen = 'garage' | 'join' | 'lobby' | 'lights' | 'race' | 'results';
@@ -44,14 +44,14 @@ export type Summary = { pos: number; gained: string; time: string; best: string;
 export type Toast = { text: string; color: string; id: number };
 
 /**
- * Pit Stop Rush (v1.13): the car is in its box with the tyres picked during the race already
- * waiting. 'wheels' = every wheel shows an arrow (FL, FR, RL, RR), swipe them in any order;
- * 'done' = crew finished (penalties still holding the car).
+ * Pit Stop Rush (v1.14): the tyres picked during the race are waiting. Each wheel (FL, FR, RL, RR):
+ * ws 0 = on the car, tap for gun off · 1 = crew swapping (seated PIT_SWAP s after offAt) · 2 = gun on, done.
+ * 'done' = all four on (penalties still holding the car).
  */
 export type PitUi = {
   phase: 'wheels' | 'done';
-  chosen: number; dirs: Dir[]; done: boolean[];
-  pen: number; wrongAt: number; t0: number; releaseAt: number;
+  chosen: number; ws: number[]; offAt: number[]; onAt: number[];
+  pen: number; wrongAt: number; wrongWheel: number; t0: number; releaseAt: number;
 };
 
 export type UiState = {
@@ -474,34 +474,38 @@ export class Engine {
     this.nextTyre = i === this.g.player.tc ? null : i;
     this.pushHud();
   }
-  /** Stopped in the box: all four wheels show their arrow at once; swipe them in any order. */
+  /** Stopped in the box: every wheel needs gun off, then (once the crew has swapped it) gun on. */
   private openPitUi() {
     const g = this.g, pl = g.player;
     const chosen = this.nextTyre ?? pl.tc;
-    const dirs = WHEELS.map(() => DIRS[Math.floor(Math.random() * 4)]);
-    this.set({ pit: { phase: 'wheels', chosen, dirs, done: [false, false, false, false], pen: 0, wrongAt: -9, t0: g.t, releaseAt: 0 } });
+    this.set({ pit: { phase: 'wheels', chosen, ws: [0, 0, 0, 0], offAt: [-9, -9, -9, -9], onAt: [-9, -9, -9, -9], pen: 0, wrongAt: -9, wrongWheel: -1, t0: g.t, releaseAt: 0 } });
     buzz([30, 30, 30]);
   }
-  /** One wheel gun: completes the first unfinished wheel showing that arrow; no match = +0.5 s. */
-  pitSwipe(dir: Dir) {
+  /**
+   * Tap a wheel (0 FL, 1 FR, 2 RL, 3 RR). 1st tap = gun off (the crew then swaps the tyre, PIT_SWAP s);
+   * 2nd tap = gun on, only once the new tyre is seated. Too early, or a finished wheel = +PIT_WRONG s.
+   */
+  pitTap(w: number) {
     const p = this.ui.pit, g = this.g;
-    if (!p || p.phase !== 'wheels' || this.paused) return;
-    const k = p.dirs.findIndex((d, i) => d === dir && !p.done[i]);
-    if (k < 0) {
-      this.set({ pit: { ...p, pen: p.pen + PIT_WRONG, wrongAt: g.t } });
-      g.shake = 0.2; buzz([60, 30, 60]);
+    if (!p || p.phase !== 'wheels' || this.paused || w < 0 || w > 3) return;
+    const ws = [...p.ws], offAt = [...p.offAt], onAt = [...p.onAt];
+    const seated = ws[w] === 1 && g.t >= offAt[w] + PIT_SWAP;
+    if (ws[w] === 0) { ws[w] = 1; offAt[w] = g.t; buzz(10); }
+    else if (seated) { ws[w] = 2; onAt[w] = g.t; buzz(16); }
+    else {
+      this.set({ pit: { ...p, pen: p.pen + PIT_WRONG, wrongAt: g.t, wrongWheel: w } });
+      g.shake = 0.15; buzz([50, 25, 50]);
       return;
     }
-    const done = p.done.map((x, i) => x || i === k);
-    if (done.every(Boolean)) { this.set({ pit: { ...p, done, phase: 'done', releaseAt: g.t + p.pen } }); buzz(25); }
-    else { this.set({ pit: { ...p, done } }); buzz(12); }
+    if (ws.every(x => x === 2)) { this.set({ pit: { ...p, ws, offAt, onAt, phase: 'done', releaseAt: g.t + p.pen } }); buzz(25); }
+    else this.set({ pit: { ...p, ws, offAt, onAt } });
   }
   get pitActive() { return !!this.ui.pit; }
   private stepPitUi() {
     const p = this.ui.pit, g = this.g, pl = g.player;
     if (!p || pl.pit !== 2) return;
     // Nobody at the controls: the crew finishes the job on its own.
-    if (p.phase === 'wheels' && g.t - p.t0 > 8) { this.set({ pit: { ...p, done: [true, true, true, true], phase: 'done', releaseAt: g.t + p.pen } }); return; }
+    if (p.phase === 'wheels' && g.t - p.t0 > 8) { this.set({ pit: { ...p, ws: [2, 2, 2, 2], phase: 'done', releaseAt: g.t + p.pen } }); return; }
     if (p.phase === 'done' && g.t >= p.releaseAt) {
       // Released: straight back to racing, the stop time shows as a toast.
       const time = g.t - p.t0;

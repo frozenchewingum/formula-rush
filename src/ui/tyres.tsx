@@ -1,6 +1,8 @@
 // Tyre choice before the race, the lobby picker and the Pit Stop Rush overlay (v1.5).
-import { useEffect, useState, type CSSProperties } from 'react';
-import { COMPOUNDS, PIT_FAST, PIT_WRONG, WHEELS, DIR_ARROW, compoundIndex, type Compound, type Wheel } from '../game/tyres';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { COMPOUNDS, PIT_FAST, PIT_WRONG, PIT_SWAP, compoundIndex, type Compound } from '../game/tyres';
+import { PitScene } from '../garage/pitScene';
+import type { Paint } from '../garage/carModel';
 import { weatherMeta, type Weather } from '../game/constants';
 import type { PitUi } from '../game/engine';
 
@@ -133,54 +135,100 @@ export function NextTyreStrip({ current, next, set, rain }: { current: number; n
 }
 
 // ---------------- Pit Stop Rush ----------------
-const WHEEL_POS: Record<Wheel, CSSProperties> = {
-  FL: { top: 36, left: 4 }, FR: { top: 36, right: 4 }, RL: { bottom: 30, left: 4 }, RR: { bottom: 30, right: 4 },
-};
+// Tap zones: one quadrant per wheel; the label sits in that quadrant's outer corner.
+const CORNERS: CSSProperties[] = [
+  { top: 0, left: 0, justifyContent: 'flex-start', alignItems: 'flex-start' }, { top: 0, right: 0, justifyContent: 'flex-end', alignItems: 'flex-start' },
+  { bottom: 0, left: 0, justifyContent: 'flex-start', alignItems: 'flex-end' }, { bottom: 0, right: 0, justifyContent: 'flex-end', alignItems: 'flex-end' },
+];
+const KEY_HINT = ['Q', 'E', 'Z', 'C'];
 
-/** In the box: every wheel shows its arrow at once; swipe them in any order. */
-export function PitStop({ pit, now, wear, carColor }: { pit: PitUi; now: () => number; wear: number; carColor: string }) {
+/**
+ * In the box: 8 taps. Each wheel: tap = gun off, the crew swaps the tyre, tap again = gun on once
+ * it's seated (yellow). Any wheel, any order, both thumbs. The car is drawn in 3D (three.js) when
+ * the phone can, otherwise as flat wheel tiles.
+ */
+export function PitStop({ pit, now, wear, oldTc, carColor, paint, tap }: { pit: PitUi; now: () => number; wear: number; oldTc: number; carColor: string; paint: Paint; tap: (w: number) => void }) {
   const [, tick] = useState(0);
+  const [three, setThree] = useState<PitScene | null>(null);
+  const host = useRef<HTMLDivElement>(null);
+  // Latest props for the 3D frame loop (read through refs so it never needs re-attaching).
+  const live = useRef({ pit, now, oldColor: (COMPOUNDS[oldTc] || COMPOUNDS[1]).color });
+  live.current = { pit, now, oldColor: live.current.oldColor };
   useEffect(() => {
     let raf = 0;
     const loop = () => { tick(x => (x + 1) % 1e6); raf = requestAnimationFrame(loop); };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
+  // 3D scene (already built on the way down the pit lane, so this is instant).
+  useEffect(() => {
+    let live = true;
+    const sc = PitScene.get();
+    sc.ready.then(ok => { if (live && ok) setThree(sc); });
+    return () => { live = false; sc.detach(); };
+  }, []);
+  const paintRef = useRef(paint);
+  paintRef.current = paint;
+  useEffect(() => {
+    if (!three || !host.current) return;
+    three.setPaint(paintRef.current);
+    three.attach(host.current, () => {
+      const { pit: p, now: clock, oldColor } = live.current;
+      return { t: clock(), ws: p.ws, offAt: p.offAt, onAt: p.onAt, oldColor, newColor: (COMPOUNDS[p.chosen] || COMPOUNDS[1]).color, wrongWheel: p.wrongWheel, wrongAt: p.wrongAt };
+    });
+    return () => three.detach();
+  }, [three]);
   const t = now();
   const time = Math.max(0, t - pit.t0);
-  const wrong = t - pit.wrongAt < 0.45;
+  const wrong = t - pit.wrongAt < 0.4;
   const chosen = COMPOUNDS[pit.chosen] || COMPOUNDS[1];
-  const left = pit.done.filter(d => !d).length;
-  const head = wrong ? 'NO WHEEL THAT WAY +0.5s' : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : left === 4 ? 'SWIPE EVERY ARROW' : left + ' TO GO';
+  const left = pit.ws.filter(x => x !== 2).length;
+  const head = wrong ? 'TOO EARLY +' + PIT_WRONG.toFixed(1) + 's' : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : left === 4 && pit.ws.every(x => x === 0) ? 'TAP EVERY WHEEL' : left + (left === 1 ? ' WHEEL' : ' WHEELS') + ' TO GO';
+  const state = (i: number) => {
+    const s = pit.ws[i], seated = s === 1 && t >= pit.offAt[i] + PIT_SWAP;
+    return s === 2 ? { label: '✓', fg: '#0E0E11', bg: '#22C55E', bd: '#22C55E' }
+      : seated ? { label: 'GUN ON', fg: '#0E0E11', bg: '#FFD400', bd: '#FFD400' }
+      : s === 1 ? { label: 'SWAP…', fg: '#A8A8B0', bg: '#1A1A1E', bd: '#3A3A42' }
+      : { label: 'GUN OFF', fg: '#F2F2F2', bg: '#1A1A1E', bd: '#F2F2F2' };
+  };
   return (
-    <div className="screen" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'calc(var(--pad-top) + 78px) 20px var(--pad-bottom)', gap: 12, background: 'linear-gradient(rgba(14,14,17,.55),rgba(14,14,17,.92) 30%,rgba(14,14,17,.96))', boxSizing: 'border-box' }}>
+    <div className="screen" data-noswipe style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'calc(var(--pad-top) + 78px) 14px var(--pad-bottom)', gap: 10, background: 'linear-gradient(rgba(14,14,17,.55),rgba(14,14,17,.92) 30%,rgba(14,14,17,.96))', boxSizing: 'border-box', touchAction: 'none' }}>
       <div style={{ ...mono, fontSize: 13, letterSpacing: '.2em', color: '#FFD400' }}>BOX BOX · TYRES {Math.round(wear * 100)}%</div>
-      <div style={{ ...mono, fontSize: 64, fontWeight: 700, lineHeight: 1, color: wrong ? '#E10600' : '#F2F2F2', transition: 'color .15s' }}>
+      <div style={{ ...mono, fontSize: 60, fontWeight: 700, lineHeight: 1, color: wrong ? '#E10600' : '#F2F2F2', transition: 'color .15s' }}>
         {time.toFixed(2)}
         {pit.pen > 0 && <span style={{ fontSize: 18, color: '#E10600', marginLeft: 8 }}>+{pit.pen.toFixed(1)}</span>}
       </div>
-      <div aria-hidden style={{ position: 'relative', width: 220, flex: '1 1 300px', maxHeight: 330, minHeight: 210, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 64, height: '82%', borderRadius: '20px 20px 12px 12px', background: carColor, boxShadow: '0 16px 40px rgba(0,0,0,.5)', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: -6, left: -16, right: -16, height: 10, borderRadius: 3, background: '#222' }} />
-          <div style={{ position: 'absolute', bottom: -4, left: -12, right: -12, height: 12, borderRadius: 3, background: '#222' }} />
-          <div style={{ position: 'absolute', top: '40%', left: 20, width: 24, height: 30, borderRadius: 12, background: '#111' }} />
+      <div style={{ position: 'relative', width: '100%', maxWidth: 360, flex: '1 1 320px', minHeight: 260 }}>
+        <div ref={host} aria-hidden style={{ position: 'absolute', inset: 0 }}>
+          {!three && (
+            // Flat fallback: the car body in the middle; the wheel tiles are the tap zones below.
+            <div style={{ position: 'absolute', left: '50%', top: '8%', bottom: '8%', width: 64, marginLeft: -32, borderRadius: '20px 20px 12px 12px', background: carColor, boxShadow: '0 16px 40px rgba(0,0,0,.5)' }} />
+          )}
         </div>
-        {WHEELS.map((w, i) => {
-          const done = pit.done[i];
+        {[0, 1, 2, 3].map(i => {
+          const st = state(i), err = wrong && pit.wrongWheel === i;
           return (
-            <div key={w} style={{ position: 'absolute', ...WHEEL_POS[w], width: 52, height: 76, borderRadius: 10, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', ...mono, fontWeight: 700,
-              background: done ? '#22C55E' : '#1A1A1E', color: done ? '#0E0E11' : '#FFD400', fontSize: done ? 18 : 30,
-              border: done ? `3px solid ${chosen.color}` : '3px solid #FFD400', boxShadow: done ? 'none' : '0 0 18px rgba(255,212,0,.35)', transition: 'background .1s' }}>
-              {done ? '✓' : DIR_ARROW[pit.dirs[i]]}
-            </div>
+            <button type="button" key={i} aria-label={['Front left', 'Front right', 'Rear left', 'Rear right'][i] + ': ' + st.label}
+              onPointerDown={e => { e.preventDefault(); tap(i); }}
+              style={{ position: 'absolute', ...CORNERS[i], width: '50%', height: '50%', border: 0, background: 'transparent', padding: 10, boxSizing: 'border-box', display: 'flex', cursor: 'pointer', touchAction: 'none' }}>
+              <span style={{ ...mono, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, width: three ? 'auto' : 66, height: three ? 'auto' : 92, minWidth: 64, padding: three ? '6px 10px' : 0, borderRadius: 10, boxSizing: 'border-box',
+                background: err ? '#E10600' : st.bg, color: err ? '#F2F2F2' : st.fg, border: `2px solid ${err ? '#E10600' : st.bd}`, fontWeight: 700, fontSize: st.label === '✓' ? 18 : 11, letterSpacing: '.06em',
+                boxShadow: st.label === 'GUN ON' ? '0 0 18px rgba(255,212,0,.45)' : 'none', opacity: three ? 0.92 : 1 }}>
+                {st.label}
+                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: '.1em' }}>{KEY_HINT[i]}</span>
+              </span>
+            </button>
           );
         })}
       </div>
-      <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1, textAlign: 'center', color: wrong ? '#E10600' : '#F2F2F2', minHeight: 30 }}>{head}</div>
-      <div style={{ ...mono, fontSize: 12, color: '#8A8A92', textAlign: 'center', minHeight: 72, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ ...display, fontWeight: 800, fontSize: 28, lineHeight: 1, textAlign: 'center', color: wrong ? '#E10600' : '#F2F2F2', minHeight: 28 }}>{head}</div>
+      <div style={{ ...mono, fontSize: 12, color: '#8A8A92', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C8C8CE' }}><TyreDot i={pit.chosen} size={20} /> {chosen.name.toUpperCase()} GOING ON</span>
-        <span>Any order · under {PIT_FAST.toFixed(1)}s = +BOOST · wrong swipe +{PIT_WRONG.toFixed(1)}s</span>
+        <span>Tap = gun off · tap again on yellow = gun on · under {PIT_FAST.toFixed(1)}s = +BOOST</span>
       </div>
     </div>
   );
 }
+
+/** Build the 3D pit scene ahead of time (call when the car enters the pit lane). */
+export function prewarmPit3d() { PitScene.get(); }
