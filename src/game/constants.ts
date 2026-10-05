@@ -95,22 +95,26 @@ export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', a
  * Traffic (v1.19) · start: your grid slot in solo races (0 = pole) · slip: slipstream pull for everyone ·
  * sling: extra speed and seconds when you pull out of a tow to pass · bump: your speed vs the car you run
  * into from behind, and the lift while you recover · yield: chance a slower AI moves aside when you close in.
+ * Braking (v1.20) · assist: how much the game brakes for corners for you (1 = all of it, 1.06 = to 6% over the
+ * limit, 0 = none) · lock: seconds of hard braking on worn tyres / slicks in the rain before a lock-up (0 = never) ·
+ * pitPen: brake for the pit lane yourself; seconds added to your stop for speeding past the line (0 = auto limiter).
  */
 export type AiProfile = {
   pace: number; spread: number; skill: number; grip: number; accel: number;
   launch: [number, number]; tow: boolean; drs: boolean; boost: number; defend: number; blurb: string;
   start: number; slip: number; sling: [number, number]; bump: [number, number]; yield: number;
+  assist: number; lock: number; pitPen: number;
 };
 export const AI_LEVELS: AiPace[] = ['Easy', 'Normal', 'Hard', 'Expert'];
 export const AI: Record<AiPace, AiProfile> = {
   Easy:   { pace: 0.88,  spread: 0.11,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 0,  defend: 0,    blurb: 'A gentle Sunday drive',
-            start: 5,  slip: 1.09,  sling: [1.1, 1.3],  bump: [0.9, 0.9],   yield: 0.85 },
+            start: 5,  slip: 1.09,  sling: [1.1, 1.3],  bump: [0.9, 0.9],   yield: 0.85, assist: 1,    lock: 0,    pitPen: 0 },
   Normal: { pace: 0.955, spread: 0.08,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 0,  defend: 0,    blurb: 'A fair fight',
-            start: 10, slip: 1.08,  sling: [1.08, 1.1], bump: [0.86, 0.85], yield: 0.35 },
-  Hard:   { pace: 1.03,  spread: 0.03,  skill: 0.88, grip: 1.045, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks',
-            start: 11, slip: 1.065, sling: [1.05, 0.8], bump: [0.8, 0.78],  yield: 0.15 },
-  Expert: { pace: 1.04,  spread: 0.02,  skill: 0.97, grip: 1.07,  accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best',
-            start: 11, slip: 1.06,  sling: [1.04, 0.6], bump: [0.75, 0.72], yield: 0.03 },
+            start: 10, slip: 1.08,  sling: [1.08, 1.1], bump: [0.86, 0.85], yield: 0.35, assist: 1.06, lock: 0.7,  pitPen: 0 },
+  Hard:   { pace: 1,     spread: 0.03,  skill: 0.88, grip: 1.02,  accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks',
+            start: 11, slip: 1.065, sling: [1.05, 0.8], bump: [0.8, 0.78],  yield: 0.15, assist: 1.15, lock: 0.5,  pitPen: 1 },
+  Expert: { pace: 1.015, spread: 0.02,  skill: 0.97, grip: 1.045, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best',
+            start: 11, slip: 1.06,  sling: [1.04, 0.6], bump: [0.75, 0.72], yield: 0.03, assist: 0,    lock: 0.35, pitPen: 1.5 },
 };
 export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;
 

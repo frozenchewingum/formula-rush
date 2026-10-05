@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.19** · Easier traffic, tuned per difficulty: softer bumps from behind, slower AI give way, start further up on Easy/Normal, a wider field, a slingshot out of the slipstream, and quicker lane changes. Hard and Expert re-tuned to stay tough. **v1.18** · Three circuits: Rush Park (the original), Monsoon Park and Harbour Streets. The host's pick syncs to the room; best laps are per track. **v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.20** · Braking matters: assist by difficulty (Easy full → Expert none), run wide when too fast, 3·2·1 brake boards, lock-ups, and a manual pit limiter on Hard/Expert. **v1.19** · Easier traffic, tuned per difficulty: softer bumps from behind, slower AI give way, start further up on Easy/Normal, a wider field, a slingshot out of the slipstream, and quicker lane changes. Hard and Expert re-tuned to stay tough. **v1.18** · Three circuits: Rush Park (the original), Monsoon Park and Harbour Streets. The host's pick syncs to the room; best laps are per track. **v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -195,8 +195,8 @@ Set in `AI` (`src/game/constants.ts`). In rooms the host's level travels with th
 
 | | Easy | Normal | Hard | Expert |
 |---|---|---|---|---|
-| Top speed vs you | 88% | 95.5% | 103% | 104% |
-| Cornering grip vs you | 92% | 97% | 104.5% | 107% |
+| Top speed vs you | 88% | 95.5% | 100% | 101.5% |
+| Cornering grip vs you | 92% | 97% | 102% | 104.5% |
 | Takes the racing line | 25% | 55% | 88% | 97% |
 | Launch reaction | 0.35–0.75 s | 0.15–0.45 s | 0.08–0.20 s | 0.05–0.13 s |
 | Slipstream / DRS | – / – | ✓ / – | ✓ / ✓ | ✓ / ✓ |
@@ -207,14 +207,20 @@ Set in `AI` (`src/game/constants.ts`). In rooms the host's level travels with th
 | Slipstream pull (everyone) | +9% | +8% | +6.5% | +6% |
 | Slingshot when you pull out of a tow | +10% · 1.3 s | +8% · 1.1 s | +5% · 0.8 s | +4% · 0.6 s |
 | Rear contact: your speed vs car ahead · lift while recovering | 90% · 90% | 86% · 85% | 80% · 78% | 75% · 72% |
+| Braking assist for corners | full (auto) | down to 6% over | down to 15% over | none |
+| Lock-up after holding the brake (worn tyres / slicks in rain) | never | 0.7 s | 0.5 s | 0.35 s |
+| Pit lane | auto limiter | auto limiter | brake yourself, speeding +1 s | brake yourself, speeding +1.5 s |
 
 AI boost follows your rules: it fills at apexes the AI actually hits, a burst costs 35 and lasts 1.6 s, and boosting wears its tyres faster too. Defending AI only move into a free lane, never into a car.
 
 AI field spread is wider on Easy (11%) and Normal (8%) so there are fewer three-wide walls. Your lane changes are ~30% quicker than before v1.19 on every level.
 
-Balance (v1.19, headless sim, Rush Park, 3 laps dry, one stop). A *good* driver hits ~60% of apexes and uses every boost, DRS and slingshot chance; a *casual* one hits ~45% and rarely boosts. Easy: both win every race. Normal: casual wins ~1 in 2 and nearly always podiums.
+Braking (v1.20): without full assist, entering a corner faster than its limit (the same look-ahead limit the assist uses, +3%) scrubs speed and tyre; well over pushes you a line wide; far over reaches the wall. Boost and slipstream add straight-line speed but no longer carry you through corners unless the assist is full (Easy). Brake boards 3 · 2 · 1 are placed from each track's speed profile (`T.brakes`).
+
+Balance (v1.20, headless sim with scripted braking, Rush Park, 3 laps dry, one stop). A *good* driver hits ~60% of apexes and uses every boost, DRS and slingshot chance; a *casual* one hits ~45% and rarely boosts. Easy: both win every race. Normal: casual wins ~1 in 2 and nearly always podiums.
 
 | | Hard | Expert |
 |---|---|---|
-| Good driver | avg P3, wins ~1 in 8, podium ~3 in 5 | avg P6, wins ~1 in 16, podium ~1 in 4 |
+| Good driver | avg P4, wins ~1 in 12, podium ~1 in 3 | avg P7, rarely wins |
+| Near-perfect braking | avg P4, podium ~1 in 2 | avg P6, wins ~1 in 12, podium ~1 in 4 |
 | Casual driver | avg P10 | avg P12 |

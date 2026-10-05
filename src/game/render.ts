@@ -76,6 +76,22 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     }
     if (i % 5 < 2) { ctx.fillStyle = 'rgba(255,255,255,.22)'; quad(4, 5, i, j); ctx.fill(); quad(6, 7, i, j); ctx.fill(); }
   }
+  // Brake boards 3 · 2 · 1 on the outside of each corner that needs braking (v1.20).
+  for (const b of T.brakes) {
+    let kk = 0;
+    for (let j = 0; j < 30; j++) { const q = T.k[(b + j) % T.N]; if (Math.abs(q) > Math.abs(kk)) kk = q; }
+    const side = kk > 0 ? -1 : 1;
+    for (let n = 0; n < 3; n++) {
+      const i = (b - n * 6 + T.N) % T.N, j = (i + 2) % T.N;
+      if (!vis[i] || !vis[j]) continue;
+      const pts = [[9.6, i], [15, i], [15, j], [9.6, j]].map(([o, k]) => proj(T.x[k] + T.nx[k] * o * side, T.y[k] + T.ny[k] * o * side));
+      if (pts.some(p => !p)) continue;
+      ctx.beginPath(); pts.forEach((p, m) => m ? ctx.lineTo(p![0], p![1]) : ctx.moveTo(p![0], p![1])); ctx.closePath();
+      ctx.fillStyle = '#F2F2F2'; ctx.fill(); ctx.strokeStyle = '#0E0E11'; ctx.lineWidth = 1; ctx.stroke();
+      const cx = (pts[0]![0] + pts[2]![0]) / 2, cy = (pts[0]![1] + pts[2]![1]) / 2, size = Math.min(26, Math.abs(pts[1]![0] - pts[0]![0]) * 0.9);
+      if (size > 5) { ctx.fillStyle = '#0E0E11'; ctx.font = `700 ${size.toFixed(0)}px 'JetBrains Mono', monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(n + 1), cx, cy); }
+    }
+  }
   ctx.strokeStyle = '#00D2BE'; ctx.lineWidth = 2;
   for (const i of T.drsStarts) if (vis[i]) { ctx.beginPath(); ctx.moveTo(S[2][i]![0], S[2][i]![1]); ctx.lineTo(S[9][i]![0], S[9][i]![1]); ctx.stroke(); }
   const lerp = (P: number[], Q: number[], t: number) => [P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t];

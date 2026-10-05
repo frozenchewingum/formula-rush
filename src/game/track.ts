@@ -7,6 +7,8 @@ export type Track = {
   x: number[]; y: number[]; hd: number[]; k: number[]; ka: number[];
   nx: number[]; ny: number[]; kerb: boolean[]; drs: boolean[];
   drsStarts: number[]; apexes: Apex[];
+  /** Brake boards (v1.20): index of the last-moment braking point (board 1) before each corner that needs it. */
+  brakes: number[];
 };
 
 export type TrackId = 'circuit-1' | 'monsoon' | 'harbour';
@@ -102,7 +104,20 @@ export function buildTrack(id: string = DEFAULT_TRACK): Track {
       drsStarts.push(s0);
     }
   });
-  return { id: def.id, N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes };
+  // Brake boards: speed profile at your top speed (corner limit from local curvature, braking at 75/s);
+  // board 1 marks where it starts dropping from flat out into a corner that's well below top speed.
+  const top = 78, vc = k.map(kk => Math.min(top, Math.sqrt(66 / Math.max(Math.abs(kk), 1e-4))));
+  const prof = [...vc];
+  for (let r = 0; r < 2; r++) for (let i = N - 1; i >= 0; i--) prof[i] = Math.min(prof[i], Math.sqrt(prof[(i + 1) % N] ** 2 + 2 * 75 * step));
+  const brakes: number[] = [];
+  for (let i = 0; i < N; i++) {
+    if (!(prof[i] < top - 1 && prof[(i - 1 + N) % N] >= top - 1)) continue;
+    let low = top;
+    for (let j = 0; j < 40; j++) low = Math.min(low, vc[(i + j) % N]);
+    if (low < 60 && (!brakes.length || i - brakes[brakes.length - 1] > 30)) brakes.push(i);
+  }
+  if (brakes.length > 1 && brakes[0] + N - brakes[brakes.length - 1] <= 30) brakes.shift();
+  return { id: def.id, N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes, brakes };
 }
 
 export function trackAt(T: Track, p: number) {
