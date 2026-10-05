@@ -52,10 +52,10 @@ export const LAP_OPTS: [number, string][] = [[1, 'SPRINT'], [3, 'SHORT'], [5, 'M
 export const MAX_LAPS = 8;
 /** [value, label, description, dot colour] */
 export const WEATHER_OPTS: [Weather, string, string, string][] = [
-  ['Random', 'Random', 'Rain may arrive or clear at any point', '#F2F2F2'],
-  ['Dry', 'Dry', 'Full grip all race', '#FFD400'],
-  ['Rain', 'Wet', 'Rain from lights out · low grip', '#3B6CFF'],
-  ['Rain on final lap', 'Late rain', 'Dry, then rain for the final lap · box for wets', '#00D2BE'],
+  ['Random', 'Random', 'Anything could happen', '#F2F2F2'],
+  ['Dry', 'Dry', 'Clear skies', '#FFD400'],
+  ['Rain', 'Wet', 'Wet from the start', '#3B6CFF'],
+  ['Rain on final lap', 'Late rain', 'Clouds gathering for the finish', '#00D2BE'],
 ];
 export const weatherMeta = (w: Weather) => WEATHER_OPTS.find(o => o[0] === w) || WEATHER_OPTS[0];
 
@@ -99,10 +99,10 @@ export type AiProfile = {
 };
 export const AI_LEVELS: AiPace[] = ['Easy', 'Normal', 'Hard', 'Expert'];
 export const AI: Record<AiPace, AiProfile> = {
-  Easy:   { pace: 0.88,  spread: 0.07,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 0,  defend: 0,    blurb: 'Slow, sloppy lines, late off the line' },
-  Normal: { pace: 0.945, spread: 0.05,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 0,  defend: 0,    blurb: 'Fair fight · AI uses the slipstream' },
-  Hard:   { pace: 1.01,  spread: 0.03,  skill: 0.88, grip: 1.035, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'Tight field · AI boosts, uses DRS and defends' },
-  Expert: { pace: 1.03,  spread: 0.02,  skill: 0.97, grip: 1.06, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'Flat out · AI boosts like you and covers your line' },
+  Easy:   { pace: 0.88,  spread: 0.07,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 0,  defend: 0,    blurb: 'A gentle Sunday drive' },
+  Normal: { pace: 0.945, spread: 0.05,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 0,  defend: 0,    blurb: 'A fair fight' },
+  Hard:   { pace: 1.01,  spread: 0.03,  skill: 0.88, grip: 1.035, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks' },
+  Expert: { pace: 1.03,  spread: 0.02,  skill: 0.97, grip: 1.06, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best' },
 };
 export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;
 
