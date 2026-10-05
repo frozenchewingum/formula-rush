@@ -112,9 +112,9 @@ export const AI: Record<AiPace, AiProfile> = {
             start: 5,  slip: 1.09,  sling: [1.1, 1.3],  bump: [0.9, 0.9],   yield: 0.85, assist: 1,    lock: 0,    pitPen: 0,   follow: true },
   Normal: { pace: 0.955, spread: 0.08,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 0,  defend: 0,    blurb: 'A fair fight',
             start: 10, slip: 1.08,  sling: [1.08, 1.1], bump: [0.86, 0.85], yield: 0.35, assist: 1.06, lock: 0.7,  pitPen: 0,   follow: true },
-  Hard:   { pace: 1.015, spread: 0.03,  skill: 0.88, grip: 1.005, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks',
+  Hard:   { pace: 1.025, spread: 0.03,  skill: 0.88, grip: 1.005, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks',
             start: 7,  slip: 1.065, sling: [1.05, 0.8], bump: [0.8, 0.78],  yield: 0.15, assist: 1.15, lock: 0.5,  pitPen: 1,   follow: false },
-  Expert: { pace: 1.03,  spread: 0.02,  skill: 0.97, grip: 1.025, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best',
+  Expert: { pace: 1.045, spread: 0.02,  skill: 0.97, grip: 1.025, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best',
             start: 9,  slip: 1.06,  sling: [1.04, 0.6], bump: [0.75, 0.72], yield: 0.03, assist: 0,    lock: 0.35, pitPen: 1.5, follow: false },
 };
 export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;

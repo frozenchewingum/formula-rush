@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.21** · Narrow sections on every track: two lanes or single file in places, yellow arrows before each squeeze, so overtaking happens where it counts. **v1.20** · Braking matters: assist by difficulty (Easy full → Expert none), run wide when too fast, 3·2·1 brake boards, lock-ups, and a manual pit limiter on Hard/Expert. **v1.19** · Easier traffic, tuned per difficulty: softer bumps from behind, slower AI give way, start further up on Easy/Normal, a wider field, a slingshot out of the slipstream, and quicker lane changes. Hard and Expert re-tuned to stay tough. **v1.18** · Three circuits: Rush Park (the original), Monsoon Park and Harbour Streets. The host's pick syncs to the room; best laps are per track. **v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.22** · Roads run 2–4 lanes: four-lane stretches to pass on, two-lane squeezes, no more single file. Hard / Expert re-tuned. **v1.21** · Narrow sections on every track: two lanes or single file in places, yellow arrows before each squeeze, so overtaking happens where it counts. **v1.20** · Braking matters: assist by difficulty (Easy full → Expert none), run wide when too fast, 3·2·1 brake boards, lock-ups, and a manual pit limiter on Hard/Expert. **v1.19** · Easier traffic, tuned per difficulty: softer bumps from behind, slower AI give way, start further up on Easy/Normal, a wider field, a slingshot out of the slipstream, and quicker lane changes. Hard and Expert re-tuned to stay tough. **v1.18** · Three circuits: Rush Park (the original), Monsoon Park and Harbour Streets. The host's pick syncs to the room; best laps are per track. **v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -100,13 +100,12 @@ Layouts live in `TRACKS` (`src/game/track.ts`) as Catmull-Rom control points, dr
 | Lap length | 1815 | 2379 | 2313 |
 | Lap (sim, Hard tyres) | ~31 s | ~43 s | ~44 s |
 
-**Narrow sections (v1.21).** `narrow: [from, to, lanes]` per track; everywhere else is 3 lanes, and the pit straight must stay 3. Lane centres are ±4.6/0 (3), ±2.3 (2) and 0 (1); the road half width tapers over ~30 units (`T.hw`), with yellow chevrons before each squeeze. Cars are funnelled onto a line that still exists, a free one if there is; side by side, the car behind backs off. On Easy / Normal your car also keeps its distance in single file and merges (`follow`); on Hard / Expert that's on you. Apex rings sit on the inside line of whatever road is there; single-file corners have none.
+**Lane sections (v1.21, 2–4 lanes v1.22).** `narrow: [from, to, lanes]` per track (2, 3 or 4 lanes); everywhere else is 3 lanes, and the pit straight must stay 3. Lane centres are ±6.9/±2.3 (4), ±4.6/0 (3) and ±2.3 (2); the road half width tapers over ~30 units (`T.hw`), and a car only gets as many lanes as the road is wide at that point (`lanesFor`). Yellow chevrons warn before each squeeze. Cars are funnelled onto a line that still exists, a free one if there is; side by side, the car behind backs off. The AI won't fill every lane side by side (on 2-lane roads too), so there's always a way past. On Easy / Normal your car also keeps its distance in narrow sections and merges (`follow`); on Hard / Expert that's on you. Apex rings sit on the inside line of whatever road is there.
 
 | | Rush Park | Monsoon Park | Harbour Streets |
 |---|---|---|---|
-| 2 lanes | after T2, right-hand esses, bottom kink | esses, return section, last two hairpins | most of the lap |
-| Single file | – | far hairpin | hotel hairpin, swimming pool, last corner |
-| Overtaking | most of the lap | both straights, T1, top sweep | start straight, after the tunnel |
+| 4 lanes (pass here) | top-right sweep, bottom straight | top sweep, back straight | after the tunnel |
+| 2 lanes | after T2, right-hand esses, bottom kink | esses, far hairpin and return section, last two hairpins | most of the lap |
 
 Per-track AI pace (`aiPace`, all levels) and `brakePace` (Hard / Expert only, where you brake yourself) keep the levels comparable: Monsoon 0.98 · 0.97, Harbour 0.985 · 0.97.
 
@@ -205,14 +204,14 @@ Set in `AI` (`src/game/constants.ts`). In rooms the host's level travels with th
 
 | | Easy | Normal | Hard | Expert |
 |---|---|---|---|---|
-| Top speed vs you | 88% | 95.5% | 100% | 101.5% |
-| Cornering grip vs you | 92% | 97% | 102% | 104.5% |
+| Top speed vs you | 88% | 95.5% | 102.5% | 104.5% |
+| Cornering grip vs you | 92% | 97% | 100.5% | 102.5% |
 | Takes the racing line | 25% | 55% | 88% | 97% |
 | Launch reaction | 0.35–0.75 s | 0.15–0.45 s | 0.08–0.20 s | 0.05–0.13 s |
 | Slipstream / DRS | – / – | ✓ / – | ✓ / ✓ | ✓ / ✓ |
 | Boost per apex hit (you: 30) | – | – | 24 | 30 |
 | Covers your line when you close in | – | – | sometimes | often |
-| Your solo grid slot | P6 | P11 | P12 | P12 |
+| Your solo grid slot | P6 | P11 | P8 | P10 |
 | Gives way when you're faster (and after a tap) | 85% | 35% | 15% | 3% |
 | Slipstream pull (everyone) | +9% | +8% | +6.5% | +6% |
 | Slingshot when you pull out of a tow | +10% · 1.3 s | +8% · 1.1 s | +5% · 0.8 s | +4% · 0.6 s |

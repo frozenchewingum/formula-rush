@@ -14,12 +14,14 @@ export type Track = {
 };
 
 /** Lane centres for 1, 2 or 3 lanes. */
-export const CENTRES: Record<number, number[]> = { 1: [0], 2: [-LANE / 2, LANE / 2], 3: [-LANE, 0, LANE] };
+export const CENTRES: Record<number, number[]> = { 1: [0], 2: [-LANE / 2, LANE / 2], 3: [-LANE, 0, LANE], 4: [-LANE * 1.5, -LANE / 2, LANE / 2, LANE * 1.5] };
 /** Road half width for 1, 2 or 3 lanes. */
-export const HALF_W: Record<number, number> = { 1: 3.4, 2: 5.4, 3: 7.5 };
+export const HALF_W: Record<number, number> = { 1: 3.4, 2: 5.4, 3: 7.5, 4: 9.8 };
+/** Most lanes a road of half width `hw` fits (while it tapers). */
+export const lanesFor = (hw: number) => (hw >= 9.7 ? 4 : hw >= 7.4 ? 3 : hw >= 5.3 ? 2 : 1);
 
 export type TrackId = 'circuit-1' | 'monsoon' | 'harbour';
-/** Narrow sections (v1.21): [from, to, lanes] in track units from the line; everywhere else has 3 lanes. */
+/** Lane sections (v1.21, 2–4 lanes v1.22): [from, to, lanes] in track units from the line; everywhere else has 3 lanes. */
 export type TrackDef = { id: TrackId; name: string; short: string; blurb: string; pts: number[][]; scale: number; narrow: [number, number, number][];
   /** AI pace on this track (v1.21), and an extra factor on levels where you brake yourself (many heavy braking zones). */
   aiPace?: number; brakePace?: number };
@@ -30,13 +32,13 @@ export type TrackDef = { id: TrackId; name: string; short: string; blurb: string
  */
 export const TRACKS: TrackDef[] = [
   { id: 'circuit-1', name: 'Rush Park', short: 'RUSH PARK', blurb: 'Where it all began', scale: 0.62,
-    narrow: [[400, 620, 2], [1110, 1290, 2], [1525, 1660, 2]],
+    narrow: [[400, 620, 2], [740, 1060, 4], [1110, 1290, 2], [1330, 1480, 4], [1525, 1660, 2]],
     pts: [[0,0],[0,-300],[40,-420],[160,-460],[260,-400],[280,-280],[380,-220],[520,-260],[600,-380],[720,-400],[800,-300],[780,-120],[680,0],[700,140],[620,260],[440,280],[300,200],[180,240],[60,200]] },
   { id: 'monsoon', name: 'Monsoon Park', short: 'MONSOON', blurb: 'Built for speed. Mind the hairpins', scale: 0.8,
-    narrow: [[870, 1200, 2], [1290, 1380, 1], [1381, 1600, 2], [1700, 1810, 2], [2120, 2215, 2]], aiPace: 0.98, brakePace: 0.97,
+    narrow: [[450, 760, 4], [870, 1200, 2], [1290, 1600, 2], [1700, 1810, 2], [1850, 2090, 4], [2120, 2215, 2]], aiPace: 0.98, brakePace: 0.97,
     pts: [[0,0],[0,-170],[0,-330],[5,-390],[35,-420],[75,-410],[85,-370],[95,-330],[125,-305],[175,-310],[280,-335],[370,-360],[440,-320],[470,-250],[460,-180],[430,-120],[460,-50],[440,20],[445,120],[415,190],[350,210],[290,215],[250,235],[222,215],[230,175],[262,120],[250,60],[270,-20],[255,-100],[240,-150],[200,-185],[140,-185],[103,-150],[95,-90],[95,50],[95,170],[90,232],[62,262],[28,262],[4,230],[0,160]] },
   { id: 'harbour', name: 'Harbour Streets', short: 'HARBOUR', blurb: 'Tight, twisty, no room for error', scale: 1,
-    narrow: [[150, 800, 2], [800, 905, 1], [905, 1330, 2], [1540, 1880, 2], [1620, 1700, 1], [1880, 1990, 1], [1990, 2165, 2]], aiPace: 0.985, brakePace: 0.97,
+    narrow: [[150, 1330, 2], [1333, 1538, 4], [1540, 2165, 2]], aiPace: 0.985, brakePace: 0.97,
     pts: [[0,0],[0,-110],[10,-165],[55,-185],[150,-200],[240,-240],[290,-290],[300,-350],[330,-400],[390,-410],[440,-390],[452,-335],[445,-285],[460,-248],[490,-250],[498,-285],[520,-315],[560,-300],[600,-240],[610,-130],[580,-30],[560,40],[577,82],[550,140],[480,160],[420,150],[395,188],[345,168],[310,196],[200,195],[165,238],[120,252],[78,236],[30,214],[5,172],[0,110]] },
 ];
 export const DEFAULT_TRACK: TrackId = 'circuit-1';
@@ -94,7 +96,7 @@ export function buildTrack(id: string = DEFAULT_TRACK): Track {
   for (const [from, to, n] of def.narrow) for (let i = Math.round(from / step); i <= Math.round(to / step); i++) lanes[((i % N) + N) % N] = n;
   const hw: number[] = [];
   for (let i = 0; i < N; i++) {
-    let w = HALF_W[3];
+    let w = HALF_W[4];
     for (let j = -12; j <= 12; j++) w = Math.min(w, HALF_W[lanes[(i + j + N) % N]] + Math.abs(j) * 0.2);
     hw.push(w);
   }

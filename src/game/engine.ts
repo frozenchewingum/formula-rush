@@ -4,7 +4,7 @@ import {
   TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, aiProfile, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
   type Settings, type Controls, type Livery, type AccelModel, type AiPace, type AiProfile, DEFAULT_SETTINGS,
 } from './constants';
-import { buildTrack, trackAt, trackDef, CENTRES, type Track } from './track';
+import { buildTrack, trackAt, trackDef, CENTRES, lanesFor, type Track } from './track';
 import { drawWorld } from './render';
 import type { EngineInput } from '../audio/engineSound';
 import {
@@ -387,8 +387,9 @@ export class Engine {
   /** Fewest lanes over the next `ahead` units: what a car must fit into soon. */
   lanesAhead(p: number, ahead = 36) {
     const T = this.T, i0 = this.idx(p);
-    let n = 3;
-    for (let j = 0; j <= ahead / T.step; j++) n = Math.min(n, T.lanes[(i0 + j) % T.N]);
+    let n = 4;
+    // Lanes the section has, but never more than the road is wide yet (it tapers in and out).
+    for (let j = 0; j <= ahead / T.step; j++) { const q = (i0 + j) % T.N; n = Math.min(n, T.lanes[q], lanesFor(T.hw[q])); }
     return n;
   }
   /** Lane centres a car at `p` should use. */
@@ -415,14 +416,15 @@ export class Engine {
     }
     return true;
   }
-  /** True if putting `c` on lane `d` would fill all three lanes side by side (a wall nobody can pass). */
+  /** True if putting `c` on lane `d` would fill every lane side by side (a wall nobody can pass). */
   private makesWall(c: Car, d: number) {
-    if (this.lanesAhead(c.p, 20) < 3) return false; // narrow: no third lane to keep open
-    const lanes = new Set([Math.round(d / LANE)]);
+    const cs = this.centres(c.p, 20);
+    if (cs.length < 2) return false; // single line: nothing to keep open
+    const lanes = new Set([this.nearestIdx(cs, d)]);
     for (const o of this.g.cars) {
-      if (o !== c && !o.finished && Math.abs(o.p - c.p) < 14 && Math.abs(o.dTarget) < HALF) lanes.add(Math.round(o.dTarget / LANE));
+      if (o !== c && !o.finished && Math.abs(o.p - c.p) < 14 && Math.abs(o.dTarget) < HALF + 2.5) lanes.add(this.nearestIdx(cs, o.dTarget));
     }
-    return lanes.size >= 3;
+    return lanes.size >= cs.length;
   }
   private nextApex(p: number) {
     const T = this.T;
@@ -840,7 +842,7 @@ export class Engine {
       if (!c.ai || !c.remote) continue;
       c.remote = false; c.startDelay = 0; c.snaps = [];
       // Pit lane state isn't broadcast: a car caught in the pit lane finishes its stop with fresh tyres.
-      if (Math.abs(c.d) > HALF) { c.pit = 3; c.wear = 1; c.outP = Math.max(c.p, Math.ceil((c.p - PIT.EXIT) / this.T.L) * this.T.L + PIT.EXIT); c.dTarget = PIT.D; }
+      if (Math.abs(c.d) > Math.max(HALF, this.halfAt(c.p))) { c.pit = 3; c.wear = 1; c.outP = Math.max(c.p, Math.ceil((c.p - PIT.EXIT) / this.T.L) * this.T.L + PIT.EXIT); c.dTarget = PIT.D; }
       else { const cs = this.centres(c.p); c.dTarget = cs[this.nearestIdx(cs, c.d)]; }
     }
   }
@@ -900,7 +902,7 @@ export class Engine {
     }
     if (pl.pit) return; // pit lane: no contact, no walls
     for (const o of g.cars) {
-      if (o === pl || pl.contactT > 0 || o.pit || Math.abs(o.d) > HALF + 0.5) continue;
+      if (o === pl || pl.contactT > 0 || o.pit || Math.abs(o.d) > Math.max(HALF, this.halfAt(o.p)) + 0.5) continue;
       const dp = o.p - pl.p, dd = Math.abs(o.d - pl.d);
       // From behind it only counts when you're closing in (or right on top of them), not when they pull away.
       if (Math.abs(dp) < 4.8 && dd < 2.05 && !(dp > 3.2 && o.v > pl.v)) {

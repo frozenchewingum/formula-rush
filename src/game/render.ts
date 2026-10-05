@@ -1,6 +1,6 @@
 // Hybrid chase/top-down camera rendered with a manual perspective projection on a 2D canvas.
 import { clamp, wrapA } from './constants';
-import { trackAt } from './track';
+import { trackAt, lanesFor } from './track';
 import { PIT, spec } from './tyres';
 import type { Engine, Car } from './engine';
 
@@ -37,7 +37,10 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
   ctx.fillStyle = rain ? '#10261A' : '#16351F';
   ctx.fillRect(0, 0, W, H);
   // Offsets 12–15 are the pit lane on the right of the main straight: inner edge, inner line, outer edge, wall.
-  const O = [-24, -8.8, -7.5, -7.2, -2.4, -2.2, 2.2, 2.4, 7.2, 7.5, 8.8, 24, PIT.IN_EDGE, PIT.IN_EDGE + 0.35, PIT.OUT_EDGE, PIT.OUT_EDGE + 0.7], NO = O.length;
+  const O = [-24, -8.8, -7.5, -7.2, -2.4, -2.2, 2.2, 2.4, 7.2, 7.5, 8.8, 24, PIT.IN_EDGE, PIT.IN_EDGE + 0.35, PIT.OUT_EDGE, PIT.OUT_EDGE + 0.7, -0.1, 0.1], NO = O.length;
+  // Lane lines (v1.22): 4/5 and 6/7 are the side dividers, 16/17 the centre one; which are used depends on the lane count.
+  const lanesHere = (i: number) => Math.min(T.lanes[i], lanesFor(T.hw[i]));
+  const DIV: Record<number, number[]> = { 1: [0, 0, 0, 0, 0, 0], 2: [-0.1, 0.1, 0, 0, 0, 0], 3: [-2.4, -2.2, 2.2, 2.4, 0, 0], 4: [-4.7, -4.5, 4.5, 4.7, -0.1, 0.1] };
   const S = e.drawCache.S || (e.drawCache.S = O.map(() => new Array(T.N).fill(null)));
   const vis = e.drawCache.V || (e.drawCache.V = new Array(T.N).fill(false));
   const range = rain ? 380 : 700;
@@ -47,9 +50,9 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     if (z < -60 || z > range || Math.abs(x) > 70 + 0.7 * Math.max(z, 0)) continue;
     let ok = true;
     // v1.21: road edges and kerbs follow the road width; lane lines follow the lane count.
-    const sw = T.hw[i] / 7.5, nl = T.lanes[i];
+    const sw = T.hw[i] / 7.5, dv = DIV[lanesHere(i)];
     for (let o = 0; o < NO; o++) {
-      const off = o >= 4 && o <= 7 ? (nl === 3 ? O[o] : nl === 2 ? (o & 1 ? 0.1 : -0.1) : 0) : o >= 1 && o <= 10 ? O[o] * sw : O[o];
+      const off = o >= 4 && o <= 7 ? dv[o - 4] : o >= 16 ? dv[o - 12] : o >= 1 && o <= 10 ? O[o] * sw : O[o];
       const p = proj(T.x[i] + T.nx[i] * off, T.y[i] + T.ny[i] * off);
       S[o][i] = p; if (!p) ok = false;
     }
@@ -77,7 +80,12 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     } else {
       ctx.fillStyle = '#C8C8CE'; quad(2, 3, i, j); ctx.fill(); quad(8, 9, i, j); ctx.fill();
     }
-    if (i % 5 < 2 && T.lanes[i] > 1 && T.lanes[j] === T.lanes[i]) { ctx.fillStyle = 'rgba(255,255,255,.22)'; quad(4, 5, i, j); ctx.fill(); if (T.lanes[i] === 3) { quad(6, 7, i, j); ctx.fill(); } }
+    const nl = lanesHere(i);
+    if (i % 5 < 2 && nl > 1 && lanesHere(j) === nl) {
+      ctx.fillStyle = 'rgba(255,255,255,.22)'; quad(4, 5, i, j); ctx.fill();
+      if (nl >= 3) { quad(6, 7, i, j); ctx.fill(); }
+      if (nl === 4) { quad(16, 17, i, j); ctx.fill(); }
+    }
   }
   // Narrowing ahead (v1.21): yellow chevrons on both edges pointing in, where the lanes run out.
   ctx.fillStyle = 'rgba(255,212,0,.85)';
