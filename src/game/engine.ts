@@ -74,6 +74,8 @@ export type StateMsg = {
   c?: number;
   /** AI cars from the host: [index, p, d, v, yaw, compound, wear]. */
   ai?: [number, number, number, number, number, number?, number?][]; aiFin?: [number, number][];
+  /** Host relay (v1.11): the other drivers' latest states, [id, t, p, d, v, yaw, boost 0/1, drs 0/1, compound]. */
+  h?: [string, number, number, number, number, number, number, number, number][];
 };
 export type FinishMsg = { id: string; finishTime: number; best: number | null };
 
@@ -129,6 +131,9 @@ export class Engine {
   private toastTimer = 0;
   private toastSeq = 0;
   private sendT = 0;
+  /** Host: latest state from each guest (arrives on their uplink) and when it was last relayed. */
+  private relay = new Map<string, StateMsg>();
+  private relayed = new Map<string, number>();
   private netInterval = 0.1;
   private canvas: HTMLCanvasElement | null = null;
   private raf = 0;
@@ -211,6 +216,7 @@ export class Engine {
     if (!player.isPlayer) { player.isPlayer = true; player.tc = myTyre; player.stints = [myTyre]; }
     this.netInterval = sendInterval(grid.filter(e => e.userId).length);
     this.sendT = -1;
+    this.relay.clear(); this.relayed.clear();
     this.g = {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
@@ -630,6 +636,13 @@ export class Engine {
         m.ai!.push([i, r2(c.p), r2(c.d), r2(c.v), r2(c.yawOff), c.tc, r2(c.wear)]);
         if (c.finished) m.aiFin!.push([i, c.finishTime]);
       });
+      // Relay the guests: only states that are new since the last update.
+      m.h = [];
+      for (const [id, s] of this.relay) {
+        if (this.relayed.get(id) === s.t) continue;
+        this.relayed.set(id, s.t);
+        m.h.push([id, s.t, r2(s.p), r2(s.d), r2(s.v), r2(s.y), s.b ? 1 : 0, s.r ? 1 : 0, s.c ?? 1]);
+      }
     }
     net.sendState(m);
   }
@@ -638,6 +651,18 @@ export class Engine {
   onRemoteState(m: StateMsg) {
     if (!this.mp || !this.g) return;
     const g = this.g;
+    // Host: guests' states arrive on their uplinks; keep the latest to relay to everyone.
+    if (this.net?.isHost() && m.id !== this.net.myId) {
+      const prev = this.relay.get(m.id);
+      if (!prev || m.t >= prev.t) this.relay.set(m.id, m);
+    }
+    // Guests: the host's update carries the other drivers too.
+    if (m.h && this.net) {
+      for (const [id, t, p, d, v, y, b, r, tc] of m.h) {
+        if (id === this.net.myId) continue;
+        this.onRemoteState({ id, t, p, d, v, y, b: !!b, r: !!r, c: tc });
+      }
+    }
     const c = g.cars.find(x => x.userId === m.id);
     if (c && c.remote) {
       c.snaps.push({ t: m.t, p: m.p, d: m.d, v: m.v, y: m.y }); c.boostOn = m.b; c.drsOn = m.r;

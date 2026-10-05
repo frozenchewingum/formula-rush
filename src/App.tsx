@@ -54,6 +54,8 @@ export default function App() {
   const [netErr, setNetErr] = useState('');
   const [starting, setStarting] = useState(false);
   const [pb, setPb] = useState<number | null>(null);
+  // Server capacity (one live room at a time on the free plan): polled while the Garage is open.
+  const [roomBusy, setRoomBusy] = useState(false);
   const [, bump] = useState(0);
   const sessionRef = useRef<RoomSession | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -85,6 +87,14 @@ export default function App() {
   };
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
+  useEffect(() => {
+    if (!supabaseConfigured || screen !== 'garage') return;
+    let live = true;
+    const poll = () => RoomSession.serverStatus().then(s => { if (live) setRoomBusy(!!s && s.active >= s.max); });
+    poll();
+    const id = window.setInterval(poll, 15000);
+    return () => { live = false; clearInterval(id); };
+  }, [screen]);
 
   // ---------- soundtrack + engine sound ----------
   useEffect(() => {
@@ -361,7 +371,7 @@ export default function App() {
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
             openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound}
-            accel={accel === DEFAULT_ACCEL ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            accel={accel === DEFAULT_ACCEL ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} roomBusy={roomBusy} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (

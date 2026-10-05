@@ -1,8 +1,8 @@
 # Formula Rush
 
-**v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
-Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
+Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
 **Loop:** Garage → Lights Out (throttle launch) → Race → Results. Multiplayer: Create Room / Join Room (4-character code) → Lobby → synchronized start.
 
@@ -18,7 +18,7 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 | | **Brake.** Press and hold the screen without swiping (↓ / S on a keyboard) to brake and tuck in behind a car instead of hitting it. |
 | | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
 | | **Tyres & Pit Stop Rush.** Pick Soft, Medium, Hard or Wet before the race. When the team calls **BOX BOX**, get on the right-hand line before the finish and swipe right into the pit lane. In the box, call your next tyres, then swipe each lit wheel in the direction shown. Under 2.0 s earns +25 boost. |
-| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → **Edit car** in the lobby to change team, livery, accent or starting tyres (a car change un-readies you) → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
+| | **7. Race friends.** Create Room → share the 4-letter code → up to 5 friends join → **Edit car** in the lobby to change team, livery, accent or starting tyres (a car change un-readies you) → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
 
 The same guide opens in the game on first launch and from the **?** button in the Garage. Clips are real gameplay captured from the game.
 
@@ -68,7 +68,7 @@ Supabase settings come from `.env.development` / `.env.production` (`VITE_SUPABA
 RLS: signed-in users read everything and write only their own rows. Room membership changes only through security-definer functions, which enforce the rules server-side:
 
 - `fr_create_room(name, team, laps, weather)` picks a free code from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`.
-- `fr_join_room(code, name, team)` locks the room row and raises `ROOM NOT FOUND`, `ROOM FULL (4/4)` or `RACE IN PROGRESS`.
+- `fr_join_room(code, name, team)` locks the room row and raises `ROOM NOT FOUND`, `ROOM FULL (6/6)` or `RACE IN PROGRESS`.
 - `fr_leave_room`, `fr_kick_player` (host drops a vanished player), `fr_claim_host` (oldest player takes over from a vanished host), `fr_set_room` (host: status/laps/weather), `fr_submit_best_lap` (keeps only improvements, rejects laps under 15 s), `fr_now` (server clock for sync).
 
 ## Garage
@@ -114,15 +114,18 @@ Tyres live in `src/game/tyres.ts`; the engine applies them to every car, AI incl
 Client-authoritative for your own car, Supabase Realtime as the relay. Channel `race:{roomId}`:
 
 - **Presence** `{ userId }` shows who is connected. If a player is gone for 8 s the host removes them; if the host is gone, the oldest player claims host.
-- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`; each grid entry carries the driver's team, livery and accent. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start at the back of the pack in random order (P9–P12 with 4 drivers), as in solo where you start P12; AI takes the other 8–10 spots on the 12-car grid. The host needs at least 2 ready drivers to start.
-- **`state`**: `{ id, t, p, d, v, y, b, r, c }` in race time (`c` = tyre compound). The send rate adapts to room size so the whole room stays inside the Realtime quota: every update is delivered to every other driver, so a room of n drivers costs n·(n−1)·rate messages/second. Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. The host also sends AI cars and their finish times; if the host leaves mid-race the new host takes over the AI.
+- **`start`** (host): `{ grid, laps, rainPlan, greenAt, lightsDelay }`; each grid entry carries the driver's team, livery and accent. Everyone runs the lights from a shared server clock (offset estimated from `fr_now` round trips), so all clients go green at the same instant. Humans start at the back of the pack in random order (P7–P12 with 6 drivers), as in solo where you start P12; AI takes the other 6–10 spots on the 12-car grid. The host needs at least 2 ready drivers to start.
+- **`state`** (host relay, v1.11): `{ id, t, p, d, v, y, b, r, c }` in race time (`c` = tyre compound). Each guest sends its car only to the host on its own uplink channel `race:{roomId}:up:{userId}` (only the host listens). The host sends one combined update on the main channel with its own car, the AI cars (`ai`, `aiFin`) and the guests' latest states (`h`). Remote cars interpolate ~100 ms behind when updates are frequent and keep driving along the track (with smooth correction) when they're sparse. If the host leaves mid-race, the new host takes over the AI and starts listening on everyone's uplink.
 - **`finish`**: `{ id, finishTime, best }`. Results update live as drivers cross the line.
 
 Contacts are resolved by each client for its own car only.
 
 ### Realtime quota
 
-A room of n drivers costs n·(n−1)·rate Realtime messages/second, since every update reaches every other driver. The rate adapts to stay under `VITE_RT_MSGS_PER_SEC` (default 80; Supabase Free allows 100/s): 10 Hz for 2–3 drivers, ~7 Hz for 4. The host's AI cars ride along in the host's own updates, so the 8–10 AI cars cost nothing extra.
+Supabase counts every broadcast as **1 sent + 1 per client that receives it** (Free plan: 100 messages/s, 200 connections and 2 M messages/month for the whole project).
+
+- **Host relay:** per update tick, guests send n−1 messages that each reach only the host (2 each), and the host sends one to the other n−1. That's **3n − 2** messages per tick, against n² for everyone-to-everyone. The rate adapts to stay under `VITE_RT_MSGS_PER_SEC` (default 85): 10 Hz for 2 drivers, 8.5 Hz for 4, 5.3 Hz for 6. A simulated 6-driver race used ~80 messages/s, and every client's view of the other cars stayed within half a car length. Before v1.11, a 4-driver room used ~107/s, which was over the free limit.
+- **One room at a time** (`fr_max_rooms()` = 1, raise it on a bigger plan). Every member heartbeats the room every 20 s (`fr_room_heartbeat`). A room silent for 60 s is retired the next time someone creates one, so a crashed tab can't block the server. `fr_create_room` raises `SERVER BUSY · A ROOM IS ALREADY RUNNING` when full. The Garage polls `fr_server_status()` every 15 s and shows **Room busy** instead of Create Room; Join Room still works for the running room until it has 6 drivers.
 
 ## Deploy
 

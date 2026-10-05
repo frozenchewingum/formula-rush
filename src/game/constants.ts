@@ -16,7 +16,7 @@ export const TEAMS: Team[] = [
 ];
 
 export const GRID_SIZE = 12;
-export const MAX_PLAYERS = 4; // humans per room; AI fills the rest of the grid
+export const MAX_PLAYERS = 6; // humans per room; AI fills the rest of the grid
 export const MIN_PLAYERS = 2;
 
 export const LANE = 4.6;
@@ -26,13 +26,18 @@ export const GRID_SLOT = GRID_SIZE - 1; // solo: player starts last, every AI ca
 export const TRACK_ID = 'circuit-1';
 
 /**
- * Realtime budget (messages/second for the whole project; every delivery to every player counts).
- * Supabase Free = 100, Pro = 500, Team = 2,500. Keep headroom for presence and lobby traffic.
+ * Realtime budget (messages/second for the whole project). Supabase counts every broadcast as
+ * 1 sent + 1 per client that receives it. Free = 100, Pro = 500, Team = 2,500.
+ * Keep headroom for presence, heartbeats and lobby traffic. One room runs at a time (fr_max_rooms).
  */
-export const RT_BUDGET = Number(import.meta.env?.VITE_RT_MSGS_PER_SEC) || 80;
+export const RT_BUDGET = Number(import.meta.env?.VITE_RT_MSGS_PER_SEC) || 85;
 
-/** Seconds between state broadcasts so a room of n drivers stays inside the Realtime budget. */
-export const sendInterval = (n: number) => Math.max(0.1, (n * Math.max(1, n - 1)) / RT_BUDGET);
+/**
+ * Seconds between state updates for a room of n drivers. Host relay: each guest sends to the host
+ * only (1 sent + 1 received), and the host sends one combined update to everyone (1 + n−1):
+ * 3n − 2 messages per tick. 2 drivers → 10 Hz, 4 → 8.5 Hz, 6 → 5.3 Hz.
+ */
+export const sendInterval = (n: number) => Math.max(0.1, (3 * Math.max(2, n) - 2) / RT_BUDGET);
 
 export const CODE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
