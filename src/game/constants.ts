@@ -1,3 +1,4 @@
+import type { TrackId } from './track';
 export type Team = { name: string; color: string; dark: string };
 
 // 11 teams. A race has 12 cars: fewer cars means fewer three-wide walls to get stuck behind.
@@ -23,7 +24,6 @@ export const LANE = 4.6;
 export const HALF = 7.5;
 export const VMAX = 78;
 export const GRID_SLOT = GRID_SIZE - 1; // solo: player starts last, every AI car ahead
-export const TRACK_ID = 'circuit-1';
 
 /**
  * Realtime budget (messages/second for the whole project). Supabase counts every broadcast as
@@ -45,7 +45,7 @@ export type Weather = 'Random' | 'Dry' | 'Rain' | 'Rain on final lap';
 export type AiPace = 'Easy' | 'Normal' | 'Hard' | 'Expert';
 export type Controls = 'swipe' | 'tilt';
 
-export type Settings = { cameraTilt: number; weather: Weather; aiPace: AiPace; laps: number };
+export type Settings = { cameraTilt: number; weather: Weather; aiPace: AiPace; laps: number; track: TrackId };
 
 /** Race settings sheet options (v1.4). */
 export const LAP_OPTS: [number, string][] = [[1, 'SPRINT'], [3, 'SHORT'], [5, 'MEDIUM'], [8, 'LONG']];
@@ -83,7 +83,7 @@ export function liveryTile(team: number, livery: Livery, accent: number) {
   const t = TEAMS[team] || TEAMS[0], P = t.color, D = t.dark, A = ACCENTS[accent] || ACCENTS[0];
   return ({ classic: [P, D, A, 'transparent'], split: [D, P, A, 'transparent'], stripe: [P, D, A, A], stealth: ['#2A2A30', '#2A2A30', P, A] } as Record<Livery, string[]>)[livery];
 }
-export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', aiPace: 'Normal', laps: 3 };
+export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', aiPace: 'Normal', laps: 3, track: 'circuit-1' };
 
 /**
  * AI difficulty (v1.16). pace: top speed vs your car · spread: gap from the front of the AI field to

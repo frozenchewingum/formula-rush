@@ -3,16 +3,33 @@ import { LANE, wrapA } from './constants';
 export type Apex = { i: number; s: number; d: number; hit: number; miss: number };
 
 export type Track = {
-  N: number; step: number; L: number;
+  id: TrackId; N: number; step: number; L: number;
   x: number[]; y: number[]; hd: number[]; k: number[]; ka: number[];
   nx: number[]; ny: number[]; kerb: boolean[]; drs: boolean[];
   drsStarts: number[]; apexes: Apex[];
 };
 
-const CONTROL = [[0,0],[0,-300],[40,-420],[160,-460],[260,-400],[280,-280],[380,-220],[520,-260],[600,-380],[720,-400],[800,-300],[780,-120],[680,0],[700,140],[620,260],[440,280],[300,200],[180,240],[60,200]];
+export type TrackId = 'circuit-1' | 'monsoon' | 'harbour';
+export type TrackDef = { id: TrackId; name: string; short: string; blurb: string; pts: number[][]; scale: number };
 
-export function buildTrack(): Track {
-  const P = CONTROL.map(p => [p[0] * 0.62, p[1] * 0.62]);
+/**
+ * Layouts as Catmull-Rom control points (y down, driven in point order, start/finish at the first point).
+ * The first stretch must stay straight for the pit lane: ~130 units before the line to ~90 after, pit on the right.
+ */
+export const TRACKS: TrackDef[] = [
+  { id: 'circuit-1', name: 'Rush Park', short: 'RUSH PARK', blurb: 'Where it all began', scale: 0.62,
+    pts: [[0,0],[0,-300],[40,-420],[160,-460],[260,-400],[280,-280],[380,-220],[520,-260],[600,-380],[720,-400],[800,-300],[780,-120],[680,0],[700,140],[620,260],[440,280],[300,200],[180,240],[60,200]] },
+  { id: 'monsoon', name: 'Monsoon Park', short: 'MONSOON', blurb: 'Built for speed. Mind the hairpins', scale: 0.8,
+    pts: [[0,0],[0,-170],[0,-330],[5,-390],[35,-420],[75,-410],[85,-370],[95,-330],[125,-305],[175,-310],[280,-335],[370,-360],[440,-320],[470,-250],[460,-180],[430,-120],[460,-50],[440,20],[445,120],[415,190],[350,210],[290,215],[250,235],[222,215],[230,175],[262,120],[250,60],[270,-20],[255,-100],[240,-150],[200,-185],[140,-185],[103,-150],[95,-90],[95,50],[95,170],[90,232],[62,262],[28,262],[4,230],[0,160]] },
+  { id: 'harbour', name: 'Harbour Streets', short: 'HARBOUR', blurb: 'Tight, twisty, no room for error', scale: 1,
+    pts: [[0,0],[0,-110],[10,-165],[55,-185],[150,-200],[240,-240],[290,-290],[300,-350],[330,-400],[390,-410],[440,-390],[452,-335],[445,-285],[460,-248],[490,-250],[498,-285],[520,-315],[560,-300],[600,-240],[610,-130],[580,-30],[560,40],[577,82],[550,140],[480,160],[420,150],[395,188],[345,168],[310,196],[200,195],[165,238],[120,252],[78,236],[30,214],[5,172],[0,110]] },
+];
+export const DEFAULT_TRACK: TrackId = 'circuit-1';
+export const trackDef = (id: string | undefined) => TRACKS.find(t => t.id === id) || TRACKS[0];
+
+export function buildTrack(id: string = DEFAULT_TRACK): Track {
+  const def = trackDef(id);
+  const P = def.pts.map(p => [p[0] * def.scale, p[1] * def.scale]);
   const n = P.length, dense: number[][] = [];
   for (let i = 0; i < n; i++) {
     const a = P[(i - 1 + n) % n], b = P[i], c = P[(i + 1) % n], d = P[(i + 2) % n];
@@ -85,7 +102,7 @@ export function buildTrack(): Track {
       drsStarts.push(s0);
     }
   });
-  return { N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes };
+  return { id: def.id, N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes };
 }
 
 export function trackAt(T: Track, p: number) {

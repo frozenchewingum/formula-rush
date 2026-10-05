@@ -4,7 +4,7 @@ import {
   TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, aiProfile, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
   type Settings, type Controls, type Livery, type AccelModel, type AiPace, type AiProfile, DEFAULT_SETTINGS,
 } from './constants';
-import { buildTrack, trackAt, type Track } from './track';
+import { buildTrack, trackAt, trackDef, type Track } from './track';
 import { drawWorld } from './render';
 import type { EngineInput } from '../audio/engineSound';
 import {
@@ -69,6 +69,8 @@ export type MpStart = {
   greenAt: number; lightsDelay: number; hostId: string;
   /** AI difficulty the host picked (v1.16; older hosts leave it out). */
   ai?: AiPace;
+  /** Circuit (v1.18; older hosts leave it out = the original circuit). */
+  track?: string;
 };
 export type FinishInfo = {
   pos: number; totalTime: number; bestLap: number | null; apexes: string; contacts: number;
@@ -183,6 +185,8 @@ export class Engine {
   resetRace(mp: MpStart | null = null) {
     this.clearTimers();
     this.mp = mp;
+    const trackId = trackDef(mp ? mp.track : this.settings.track).id;
+    if (this.T.id !== trackId) { this.T = buildTrack(trackId); this.drawCache = {}; }
     const T = this.T;
     const laps = mp ? mp.laps : this.settings.laps;
     const ai = aiProfile(mp ? mp.ai ?? this.settings.aiPace : this.settings.aiPace);
