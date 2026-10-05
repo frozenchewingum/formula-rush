@@ -28,6 +28,8 @@ export type Car = {
   /** Pit state: 0 racing · 1 pit lane to box · 2 stopped · 3 pit lane to exit · 4 merging back. */
   pit: number; lineP: number; boxP: number; outP: number; pitHold: number; pitT0: number; pitChecked: number;
   stops: number; bestPit: number; stints: number[]; boxCalled: boolean; failCalled: boolean;
+  /** AI boost (Hard / Expert, v1.17): meter 0–100 earned at apexes, seconds of boost left, next defend check. */
+  ab: number; abT: number; defT: number;
 };
 type Snap = { t: number; p: number; d: number; v: number; y: number };
 
@@ -214,6 +216,7 @@ export class Engine {
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
         pit: 0, lineP: 0, boxP: 0, outP: 0, pitHold: 0, pitT0: 0, pitChecked: -1,
         stops: 0, bestPit: 0, stints: [], boxCalled: false, failCalled: false,
+        ab: 20, abT: 0, defT: Math.random(),
       };
     });
     for (const c of cars) c.stints.push(c.tc);
@@ -551,6 +554,11 @@ export class Engine {
         const far = live && g.ai.drs && T.drs[c.i] ? this.carAhead(c, 400, 99) : null;
         c.drsOn = !!far && far.gap / Math.max(c.v, 1) < 1;
         if (c.drsOn) mult *= 1.12;
+        // Hard / Expert AI spend boost the way you do: a 1.6 s burst for 35 of the meter.
+        if (live && g.ai.boost && c.abT <= 0 && c.ab >= 35 && !c.drsOn) { c.ab -= 35; c.abT = 1.6; }
+        c.boostOn = live && c.abT > 0;
+        if (c.boostOn) mult *= 1.25;
+        if (c.abT > 0) c.abT -= dt;
         else if (live && g.ai.tow) { const sl = this.carAhead(c, 30, 1.6); if (sl && sl.gap > 6) mult *= 1.06; }
       }
       if (c.pit) vmax = Math.min(vmax, VMAX);
@@ -585,6 +593,13 @@ export class Engine {
           const want = ap && Math.random() < g.skill ? ap.d : (Math.random() < 0.35 ? (Math.floor(Math.random() * 3) - 1) * L : c.dTarget);
           if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
+        // Defending: a human closing in behind on another line → move across to cover it, now and then.
+        if (g.ai.defend && started && !c.finished && (c.defT -= dt) <= 0) {
+          c.defT = 0.9 + Math.random() * 0.6;
+          const chaser = g.cars.find(o => !o.ai && !o.pit && !o.finished && c.p - o.p > 8 && c.p - o.p < 30 && Math.abs(o.d - c.dTarget) > 2.3);
+          const cover = chaser ? Math.round(chaser.dTarget / L) * L : 0;
+          if (chaser && Math.random() < g.ai.defend && Math.abs(cover) <= L && this.laneFree(c, cover) && !this.makesWall(c, cover)) c.dTarget = cover;
+        }
       }
       c.v += clamp(target - c.v, -75 * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * (c.isPlayer ? 1 : g.ai.accel / (24 / 26)) * dt);
       const prevD = c.d;
@@ -596,7 +611,7 @@ export class Engine {
       c.p += c.v * dt / clamp(1 - c.k * c.d, 0.6, 1.4);
       // Tyre wear by distance: a compound lasts `life` laps; boost works the tyres harder.
       if (started && !c.finished && c.p > 0) {
-        const boosting = c.isPlayer && g.boostT > 0 ? 1.8 : 1;
+        const boosting = (c.isPlayer ? g.boostT > 0 : c.boostOn) ? 1.8 : 1;
         c.wear = Math.max(0, c.wear - (c.p - prevP) / T.L / spec(c.tc).life * wearRate(c.tc, rain) * boosting);
       }
       c.yawOff += (clamp((c.d - prevD) / dt / Math.max(c.v, 8), -0.45, 0.45) - c.yawOff) * Math.min(1, dt * 10);
@@ -605,6 +620,11 @@ export class Engine {
       if (!c.finished && c.p >= g.laps * T.L) {
         c.finished = true; justFinished = c.isPlayer;
         c.finishTime = g.t - (c.p - g.laps * T.L) / Math.max(c.v, 1);
+      }
+      if (!c.isPlayer && g.ai.boost && !c.pit && !c.finished && c.p > 0) {
+        for (const a of T.apexes) {
+          if (Math.floor((prevP - a.s) / T.L) !== Math.floor((c.p - a.s) / T.L) && Math.abs(c.d - a.d) < 2.6) c.ab = Math.min(100, c.ab + g.ai.boost);
+        }
       }
       if (c.isPlayer) this.playerEvents(prevP, dt, justFinished);
       if (justFinished) this.finish();

@@ -89,18 +89,20 @@ export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', a
  * AI difficulty (v1.16). pace: top speed vs your car · spread: gap from the front of the AI field to
  * the back · skill: chance of taking the racing line through the next apex (also pit calls) ·
  * grip: cornering grip vs yours · accel: pull out of corners (1 ≈ your car) · launch: reaction
- * window at lights out (s) · tow / drs: AI uses slipstream / DRS like you do.
+ * window at lights out (s) · tow / drs: AI uses slipstream / DRS like you do · boost: what the AI earns
+ * per apex it hits (you earn 30) and spends like you do (0 = no boost) · defend: chance per check that an AI
+ * with a human closing behind moves across to cover their line.
  */
 export type AiProfile = {
   pace: number; spread: number; skill: number; grip: number; accel: number;
-  launch: [number, number]; tow: boolean; drs: boolean; blurb: string;
+  launch: [number, number]; tow: boolean; drs: boolean; boost: number; defend: number; blurb: string;
 };
 export const AI_LEVELS: AiPace[] = ['Easy', 'Normal', 'Hard', 'Expert'];
 export const AI: Record<AiPace, AiProfile> = {
-  Easy:   { pace: 0.88,  spread: 0.07,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, blurb: 'Slow, sloppy lines, late off the line' },
-  Normal: { pace: 0.945, spread: 0.05,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, blurb: 'Fair fight · AI uses the slipstream' },
-  Hard:   { pace: 0.985, spread: 0.04,  skill: 0.8,  grip: 1,    accel: 0.97, launch: [0.1, 0.28],  tow: true,  drs: true,  blurb: 'Tight field · slipstream and DRS' },
-  Expert: { pace: 1.015, spread: 0.025, skill: 0.95, grip: 1.04, accel: 1,    launch: [0.06, 0.16], tow: true,  drs: true,  blurb: 'Flat out · you need boost, apexes and DRS' },
+  Easy:   { pace: 0.88,  spread: 0.07,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 0,  defend: 0,    blurb: 'Slow, sloppy lines, late off the line' },
+  Normal: { pace: 0.945, spread: 0.05,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 0,  defend: 0,    blurb: 'Fair fight · AI uses the slipstream' },
+  Hard:   { pace: 1.01,  spread: 0.03,  skill: 0.88, grip: 1.035, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'Tight field · AI boosts, uses DRS and defends' },
+  Expert: { pace: 1.03,  spread: 0.02,  skill: 0.97, grip: 1.06, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'Flat out · AI boosts like you and covers your line' },
 };
 export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;
 
