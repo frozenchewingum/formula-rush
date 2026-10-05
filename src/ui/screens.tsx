@@ -7,6 +7,7 @@ import { CarStage } from './CarStage';
 import { TyreDot, TyrePicker } from './tyres';
 import { COMPOUNDS, type Compound } from '../game/tyres';
 import type { UiState } from '../game/engine';
+import type { SoundState } from '../audio/music';
 import type { PlayerRow, RoomSession } from '../net/room';
 
 const mono: CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
@@ -28,7 +29,7 @@ export function Garage(p: {
   team: number; setTeam: (t: number) => void; livery: Livery; setLivery: (l: Livery) => void; accent: number; setAccent: (a: number) => void;
   controls: Controls; setControls: (c: Controls) => void;
   settings: Settings; startSolo: () => void; createRoom: () => void; openJoin: () => void;
-  openSettings: () => void; openGuide: () => void; muted: boolean; toggleMusic: () => void; busy: string; err: string; pb: number | null; online: boolean;
+  openSettings: () => void; openGuide: () => void; sound: SoundState; armSound: () => void; toggleSound: () => void; busy: string; err: string; pb: number | null; online: boolean;
 }) {
   const tm = TEAMS[p.team], tilt = p.controls === 'tilt', n = TEAMS.length;
   const [tab, setTab] = useState<GTab>(() => { try { return (sessionStorage.getItem('fr-gtab') as GTab) || 'team'; } catch { return 'team'; } });
@@ -66,10 +67,12 @@ export function Garage(p: {
           <button type="button" aria-label="How to play" title="How to play" className="icon-btn round" onClick={p.openGuide}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
           </button>
-          <button type="button" aria-label={p.muted ? 'Turn music on' : 'Turn music off'} aria-pressed={!p.muted} title="Music (M)" className="icon-btn round" onClick={p.toggleMusic}>
+          <button type="button" aria-label={p.sound === 'muted' ? 'Turn sound on' : p.sound === 'locked' ? 'Start sound' : 'Turn sound off'} aria-pressed={p.sound !== 'muted'}
+            title={p.sound === 'locked' ? 'Tap for sound' : 'Sound (M)'} className={'icon-btn round sound-' + p.sound}
+            onPointerDown={p.armSound} onKeyDown={p.armSound} onClick={p.toggleSound}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 5 6 9H2v6h4l5 4V5z" />
-              {p.muted ? <path d="m23 9-6 6M17 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />}
+              {p.sound === 'muted' ? <path d="m23 9-6 6M17 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />}
             </svg>
           </button>
         </div>
@@ -176,7 +179,9 @@ export function SettingsBar({ laps, weather, canEdit, onClick }: { laps: number;
 }
 
 /** Bottom sheet: laps + weather, plus driver tweaks (AI pace, camera tilt) folded under "More". */
-export function RaceSettingsSheet({ settings, set, close, mode }: { settings: Settings; set: (s: Settings) => void; close: () => void; mode: string }) {
+type AudioPrefs = { music: boolean; engine: boolean; setMusic: (on: boolean) => void; setEngine: (on: boolean) => void };
+
+export function RaceSettingsSheet({ settings, set, close, mode, audio }: { settings: Settings; set: (s: Settings) => void; close: () => void; mode: string; audio: AudioPrefs }) {
   const [more, setMore] = useState(false);
   const label: CSSProperties = { ...mono, fontSize: 11, letterSpacing: '.2em', color: '#8A8A92' };
   useEffect(() => {
@@ -225,7 +230,7 @@ export function RaceSettingsSheet({ settings, set, close, mode }: { settings: Se
           </div>
         </div>
         <button type="button" className="back" onClick={() => setMore(m => !m)} aria-expanded={more} style={{ alignSelf: 'stretch', justifyContent: 'space-between', fontSize: 11, letterSpacing: '.2em', color: '#8A8A92', minHeight: 32 }}>
-          <span>MORE · AI PACE &amp; CAMERA</span><span>{more ? '−' : '+'}</span>
+          <span>MORE · AI PACE, CAMERA &amp; SOUND</span><span>{more ? '−' : '+'}</span>
         </button>
         {more && (
           <>
@@ -242,6 +247,15 @@ export function RaceSettingsSheet({ settings, set, close, mode }: { settings: Se
               <span style={{ ...label, display: 'flex', justifyContent: 'space-between' }}><span>CAMERA TILT</span><span style={{ color: '#F2F2F2' }}>{settings.cameraTilt}°</span></span>
               <input type="range" min={35} max={90} step={1} value={settings.cameraTilt} onChange={e => set({ ...settings, cameraTilt: +e.target.value })} />
             </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {([['MUSIC', audio.music, audio.setMusic], ['ENGINE SOUND', audio.engine, audio.setEngine]] as [string, boolean, (on: boolean) => void][]).map(([name, on, setOn]) => (
+                <button type="button" role="switch" aria-checked={on} key={name} onClick={() => setOn(!on)}
+                  style={{ minHeight: 44, borderRadius: 10, border: 0, background: '#1E1E22', color: on ? '#F2F2F2' : '#8A8A92', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', cursor: 'pointer', ...mono, fontSize: 11, fontWeight: 700, letterSpacing: '.1em' }}>
+                  <span>{name}</span>
+                  <span style={{ padding: '3px 7px', borderRadius: 4, background: on ? '#22C55E' : '#2A2A30', color: on ? '#0E0E11' : '#A8A8B0' }}>{on ? 'ON' : 'OFF'}</span>
+                </button>
+              ))}
+            </div>
           </>
         )}
         <button type="button" onClick={close} style={{ height: 54, flexShrink: 0, borderRadius: 12, border: 0, background: '#F2F2F2', color: '#0E0E11', fontWeight: 600, fontSize: 16, cursor: 'pointer', fontFamily: 'Barlow, sans-serif' }}>Done</button>

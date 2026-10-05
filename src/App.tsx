@@ -21,8 +21,9 @@ export default function App() {
   const engine = useMemo(() => new Engine(), []);
   const music = useMemo(() => new Music(), []);
   // Debug hook used by the guide-capture script; VITE_FR_DEBUG is never set in production builds.
-  if (import.meta.env?.VITE_FR_DEBUG) (window as unknown as { __fr?: Engine }).__fr = engine;
-  const [muted, setMuted] = useState(music.muted);
+  if (import.meta.env?.VITE_FR_DEBUG) Object.assign(window, { __fr: engine, __frMusic: music });
+  // Re-render whenever the sound state changes (first tap, mute, music/engine switches).
+  const [, soundTick] = useState(0);
   const ui = useSyncExternalStore(engine.subscribe, engine.getUi);
   const [screen, setScreenState] = useState<Screen>('garage');
   const [team, setTeam] = useState(() => +(ls.get('fr-team') || 0) % TEAMS.length);
@@ -70,18 +71,31 @@ export default function App() {
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
 
-  // ---------- soundtrack ----------
+  // ---------- soundtrack + engine sound ----------
   useEffect(() => {
+    music.onState = () => soundTick(x => x + 1);
+    // Browsers only start audio inside a user gesture. On phones a touch only counts on touchend/click
+    // (not pointerdown), so listen to all of them; whichever arrives first starts the sound.
     const unlock = (e: Event) => {
       if (e instanceof KeyboardEvent && (e.key === 'm' || e.key === 'M') && (e.target as HTMLElement)?.tagName !== 'INPUT') {
-        music.setMuted(!music.muted); setMuted(music.muted);
+        music.unlock(); music.setMuted(!music.muted);
+        return;
       }
       music.unlock();
     };
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
-    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); music.dispose(); };
-  }, [music]);
+    const evs = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+    for (const ev of evs) window.addEventListener(ev, unlock, { passive: true });
+    // Engine sound follows the race every frame.
+    let raf = 0, last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const eng = music.engine();
+      if (eng) eng.update(dt, engine.soundInput(dt));
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { for (const ev of evs) window.removeEventListener(ev, unlock); cancelAnimationFrame(raf); music.dispose(); };
+  }, [music, engine]);
   useEffect(() => {
     const scene: Scene = screen === 'lights' ? 'lights' : screen === 'race' ? 'race' : screen === 'results' ? 'results' : 'menu';
     music.setScene(scene);
@@ -93,7 +107,15 @@ export default function App() {
     music.setBoost(ui.hud.boostOn || ui.hud.drsOn);
     music.setRain(ui.hud.rain);
   }, [music, screen, ui.hud]);
-  const toggleMusic = () => { music.unlock(); music.setMuted(!music.muted); setMuted(music.muted); };
+  // The tap that first starts the audio must not also switch it off: remember whether sound was
+  // already playing when the button was pressed (React handlers run before the window listener).
+  const soundWasOn = useRef(false);
+  const armSound = () => { soundWasOn.current = music.state === 'on'; };
+  const toggleSound = () => {
+    music.unlock();
+    if (music.muted) music.setMuted(false);
+    else if (soundWasOn.current) music.setMuted(true);
+  };
 
   // deep link ?room=CODE
   useEffect(() => {
@@ -296,11 +318,12 @@ export default function App() {
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
-            openSettings={openSettings} openGuide={() => setShowGuide(true)} muted={muted} toggleMusic={toggleMusic} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (
-          <RaceSettingsSheet settings={settings} set={setSettings} close={closeSettings} mode={screen === 'lobby' ? 'ROOM · HOST ONLY' : 'SOLO RACE'} />
+          <RaceSettingsSheet settings={settings} set={setSettings} close={closeSettings} mode={screen === 'lobby' ? 'ROOM · HOST ONLY' : 'SOLO RACE'}
+            audio={{ music: music.musicOn, engine: music.engineOn, setMusic: on => { music.unlock(); music.setMusicOn(on); }, setEngine: on => { music.unlock(); music.setEngineOn(on); } }} />
         )}
         {screen === 'join' && <Join code={joinCode} setCode={c => { setJoinCode(c); setJoinErr(''); }} err={joinErr} busy={busy === 'join'} submit={submitJoin} back={() => setScreen('garage')} />}
         {screen === 'lobby' && session?.room && <Lobby s={session} settings={settings} leave={leaveRoom} start={hostStart} starting={starting} openSettings={openSettings} tyre={tyre} setTyre={setTyre} />}

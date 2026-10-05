@@ -3,6 +3,8 @@
 // and drums. Each race moves to the next track.
 // Layers fade in and out with the race state: garage → lights → race → final lap → results.
 
+import { EngineSound } from './engineSound';
+
 export type Scene = 'menu' | 'lights' | 'race' | 'results';
 
 type Layer = 'pad' | 'ost' | 'high' | 'bass' | 'kick' | 'hats' | 'snare' | 'brass';
@@ -37,9 +39,22 @@ export const TRACKS: { name: string; bpm: number; prog: Chord[]; ost: number[] }
   { name: 'Night Race', bpm: 116, prog: [ch(36, true), ch(34, false), ch(32, false), ch(34, false)], ost: [0, 0, 2, 1, 3, 1, 2, 0, 0, 0, 2, 1, 4, 3, 2, 1] },
 ];
 
+/** What the sound button shows: waiting for a first tap, playing, or switched off. */
+export type SoundState = 'locked' | 'on' | 'muted';
+
+const pref = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v == null ? d : v === 'on'; } catch { return d; } };
+const savePref = (k: string, on: boolean) => { try { localStorage.setItem(k, on ? 'on' : 'off'); } catch { /* storage blocked */ } };
+
 export class Music {
-  private ctx: AudioContext | null = null;
+  ctx: AudioContext | null = null;
+  /** Music bus (all score layers). */
   private master!: GainNode;
+  /** Sound effects bus (engine); the engine sound connects here. */
+  sfx!: GainNode;
+  /** Everything: the sound button mutes this. */
+  private out!: GainNode;
+  /** Called whenever `state` may have changed (first tap, mute, tab hidden). */
+  onState: () => void = () => {};
   private gains = {} as Record<Layer, GainNode>;
   private ostFilter!: BiquadFilterNode;
   private noise!: AudioBuffer;
@@ -53,28 +68,55 @@ export class Music {
   private rain = false;
   private track = 0;
   private sixteenth = 60 / TRACKS[0].bpm / 4;
+  /** All sound off (the speaker button). */
   muted: boolean;
+  /** Separate switches in Race settings → More. */
+  musicOn: boolean;
+  engineOn: boolean;
 
   constructor() {
-    let m = false;
-    try { m = localStorage.getItem('fr-music') === 'off'; } catch { /* storage blocked */ }
-    this.muted = m;
+    // 'fr-sound' is the speaker button; older builds stored it as 'fr-music'.
+    let legacyOff = false;
+    try { legacyOff = localStorage.getItem('fr-sound') == null && localStorage.getItem('fr-music') === 'off'; } catch { /* storage blocked */ }
+    this.muted = legacyOff ? false : !pref('fr-sound', true);
+    this.musicOn = pref('fr-music-on', true);
+    this.engineOn = pref('fr-engine-on', true);
     this.setTrack(Math.floor(Math.random() * TRACKS.length));
   }
 
-  /** Must be called from a user gesture (tap / key) so the browser allows audio. */
+  get state(): SoundState {
+    if (this.muted) return 'muted';
+    return this.ctx && this.ctx.state === 'running' ? 'on' : 'locked';
+  }
+
+  /**
+   * Start (or resume) audio. Browsers only allow this inside a user gesture, and on phones only on
+   * touch-end / click, not touch-start, so App calls this from every kind of gesture event.
+   */
   unlock() {
-    if (this.ctx) { if (this.ctx.state === 'suspended' && !document.hidden) this.ctx.resume(); return; }
+    // iOS: play through the ring/silent switch like a game, not like a ringtone.
+    try { const s = (navigator as unknown as { audioSession?: { type: string } }).audioSession; if (s && s.type !== 'playback') s.type = 'playback'; } catch { /* unsupported */ }
+    if (this.ctx) {
+      if (this.ctx.state !== 'running' && this.ctx.state !== 'closed' && !document.hidden) this.ctx.resume().then(() => this.onState(), () => {});
+      return;
+    }
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
-    const ctx = new AC();
+    const ctx = new AC({ latencyHint: 'interactive' });
     this.ctx = ctx;
+    ctx.addEventListener('statechange', () => this.onState());
+    if (ctx.state !== 'running') ctx.resume().then(() => this.onState(), () => {});
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 4;
-    comp.connect(ctx.destination);
+    this.out = ctx.createGain();
+    this.out.gain.value = this.muted ? 0 : 1;
+    comp.connect(this.out).connect(ctx.destination);
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.85;
+    this.master.gain.value = this.musicOn ? 0.85 : 0;
     this.master.connect(comp);
+    this.sfx = ctx.createGain();
+    this.sfx.gain.value = this.engineOn ? 1 : 0;
+    this.sfx.connect(comp);
     this.ostFilter = ctx.createBiquadFilter();
     this.ostFilter.type = 'lowpass'; this.ostFilter.Q.value = 6; this.ostFilter.frequency.value = 900;
     for (const l of LAYERS) {
@@ -93,14 +135,28 @@ export class Music {
     this.timer = window.setInterval(() => this.schedule(), 25);
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
-      if (document.hidden) this.ctx.suspend(); else this.ctx.resume();
+      if (document.hidden) this.ctx.suspend(); else this.ctx.resume().catch(() => {});
     });
+    this.onState();
   }
 
   setMuted(m: boolean) {
     this.muted = m;
-    try { localStorage.setItem('fr-music', m ? 'off' : 'on'); } catch { /* storage blocked */ }
-    if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.85, this.ctx.currentTime, 0.08);
+    savePref('fr-sound', !m);
+    if (this.ctx) this.out.gain.setTargetAtTime(m ? 0 : 1, this.ctx.currentTime, 0.08);
+    this.onState();
+  }
+  setMusicOn(on: boolean) {
+    this.musicOn = on;
+    savePref('fr-music-on', on);
+    if (this.ctx) this.master.gain.setTargetAtTime(on ? 0.85 : 0, this.ctx.currentTime, 0.08);
+    this.onState();
+  }
+  setEngineOn(on: boolean) {
+    this.engineOn = on;
+    savePref('fr-engine-on', on);
+    if (this.ctx) this.sfx.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.08);
+    this.onState();
   }
 
   setScene(s: Scene) {
@@ -265,5 +321,13 @@ export class Music {
   }
   private cymbal(t: number, v: number) { this.noiseHit(t, this.master, 'highpass', 5200, 0.35 * v, 1.6); }
 
-  dispose() { clearInterval(this.timer); this.ctx?.close(); this.ctx = null; }
+  private eng: EngineSound | null = null;
+  /** The engine sound, created on the shared context once audio is unlocked. */
+  engine(): EngineSound | null {
+    if (!this.ctx) return null;
+    if (!this.eng) this.eng = new EngineSound(this.ctx, this.sfx, this.noise);
+    return this.eng;
+  }
+
+  dispose() { clearInterval(this.timer); this.ctx?.close(); this.ctx = null; this.eng = null; }
 }
