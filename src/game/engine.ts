@@ -1,8 +1,8 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint,
-  type Settings, type Controls, type Livery, DEFAULT_SETTINGS,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate,
+  type Settings, type Controls, type Livery, type AccelModel, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
@@ -107,6 +107,8 @@ export class Engine {
   accent = 0;
   /** Starting tyres picked before the race (v1.5). */
   startCompound: Compound = 'medium';
+  /** Acceleration feel under test (v1.8 hidden toggle). */
+  accelModel: AccelModel = 'classic';
   screen: Screen = 'garage';
   ui: UiState;
   net: NetLink | null = null;
@@ -540,7 +542,7 @@ export class Engine {
           if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
       }
-      c.v += clamp(target - c.v, -75 * dt, (c.isPlayer ? 26 : 24) * dt);
+      c.v += clamp(target - c.v, -75 * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * dt);
       const prevD = c.d;
       const wets = spec(c.tc).id === 'wet';
       const lr = c.isPlayer ? 16 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;

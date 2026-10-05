@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Engine, type Screen, type MpStart } from './game/engine';
-import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, isLivery, type Controls, type Settings, type Livery } from './game/constants';
+import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, isLivery, isAccelModel, type Controls, type Settings, type Livery, type AccelModel } from './game/constants';
 import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
@@ -33,6 +33,11 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(() => load('fr-settings', DEFAULT_SETTINGS));
   const [tyre, setTyre] = useState<Compound>(() => { const v = ls.get('fr-tyre'); return isCompound(v) ? v : 'soft'; });
   const [showTyres, setShowTyres] = useState(false);
+  // Hidden acceleration test toggle: ?accel=… in the URL, or long-press the logo in the Garage.
+  const [accel, setAccel] = useState<AccelModel>(() => {
+    const q = new URLSearchParams(location.search).get('accel'), v = q || ls.get('fr-accel');
+    return isAccelModel(v) ? v : 'classic';
+  });
   const closeTyres = useCallback(() => setShowTyres(false), []);
   const [showSettings, setShowSettings] = useState(false);
   const closeSettings = useCallback(() => setShowSettings(false), []);
@@ -68,6 +73,11 @@ export default function App() {
   useEffect(() => { engine.accent = accent; ls.set('fr-accent', String(accent)); }, [engine, accent]);
   useEffect(() => { engine.controls = controls; ls.set('fr-controls', controls); }, [engine, controls]);
   useEffect(() => { engine.startCompound = tyre; ls.set('fr-tyre', tyre); }, [engine, tyre]);
+  useEffect(() => { engine.accelModel = accel; ls.set('fr-accel', accel); }, [engine, accel]);
+  const cycleAccel = () => {
+    const i = ACCEL_MODELS.findIndex(m => m[0] === accel), next = ACCEL_MODELS[(i + 1) % ACCEL_MODELS.length];
+    setAccel(next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
+  };
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
 
@@ -318,7 +328,8 @@ export default function App() {
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
-            openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound}
+            accel={accel === 'classic' ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (
