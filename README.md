@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.10** · Countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–4 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -11,14 +11,14 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 | | |
 |---|---|
 | <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Spin the 3D car, pick a team (‹ › or the TEAM tab), a livery and an accent colour, choose Swipe or Tilt, set laps and weather, then tap **RACE** to take on 11 AI drivers. |
-| <img src="public/guide/launch.webp" width="160" alt="Launch"> | **2. Nail the launch.** Hold the screen (or Space) while the five red lights come on and let go the instant they turn green. Letting go early costs a second. |
+| <img src="public/guide/launch.webp" width="160" alt="Launch"> | **2. Nail the launch.** The five red lights count down by themselves with a beep each. Rev freely (hold to rev, let go to lift; no jump-start penalty). When they turn green, let go fast: within 0.15 s is **Perfect** (rolling start + 20 boost), within 0.35 s **Good** (small rolling start), up to 0.7 s clean, slower is a **Late start** (+0.5 s bog). If you never let go, the car goes on its own at 1.5 s, bogged. |
 | <img src="public/guide/lines.webp" width="160" alt="Lines and apexes"> | **3. Change lines, hit apexes.** Swipe left/right between three lines. Drive through the yellow rings on the inside of corners to fill boost; inside lines are shorter. |
 | <img src="public/guide/boost.webp" width="160" alt="Boost"> | **4. Boost.** Swipe up (↑ / Space) once the bar passes the notch for 25% more speed. |
 | <img src="public/guide/drs.webp" width="160" alt="DRS"> | **5. DRS.** On the teal straights, get within a second of the car ahead and **DRS READY** appears. Swipe up to open it. |
 | | **Brake.** Press and hold the screen without swiping (↓ / S on a keyboard) to brake and tuck in behind a car instead of hitting it. |
 | | **6. Keep it clean.** Cars and walls cost speed, tyres wear, and rain cuts grip and visibility. |
 | | **Tyres & Pit Stop Rush.** Pick Soft, Medium, Hard or Wet before the race. When the team calls **BOX BOX**, get on the right-hand line before the finish and swipe right into the pit lane. In the box, call your next tyres, then swipe each lit wheel in the direction shown. Under 2.0 s earns +25 boost. |
-| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
+| | **7. Race friends.** Create Room → share the 4-letter code → up to 3 friends join → **Edit car** in the lobby to change team, livery, accent or starting tyres (a car change un-readies you) → everyone readies up → the host starts. AI fills the rest of the 12-car grid. |
 
 The same guide opens in the game on first launch and from the **?** button in the Garage. Clips are real gameplay captured from the game.
 
@@ -158,7 +158,8 @@ Audio starts on the first tap or key press (a browser rule). Phones only count a
 | → / swipe right on the right-hand line in the pit window | take the pit lane (Tilt: steer hard right) |
 | in the box: 1–4 / tap | call Soft / Medium / Hard / Wet |
 | in the box: arrows / swipe | wheel guns, in the direction shown |
-| hold, release on green | launch; releasing on red is a +1 s jump start |
+| hold / release on the grid | rev freely; the first release after green launches (≤0.15 s perfect, ≤0.35 s good, >0.7 s late) |
+| Esc / P / pause button (solo) | pause: Resume, Restart race, Exit to Garage. The game also pauses itself when the app goes to the background. |
 | Tilt mode | drag, tilt or hold arrows to steer; tap the right edge to boost |
 | M | sound on/off |
 
