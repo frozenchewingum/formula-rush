@@ -1,6 +1,6 @@
 // Tyre choice before the race, the lobby picker and the Pit Stop Rush overlay (v1.5).
 import { useEffect, useState, type CSSProperties } from 'react';
-import { COMPOUNDS, PIT_FAST, PIT_GOOD, PIT_WRONG, WHEEL_NAME, DIR_ARROW, compoundIndex, type Compound, type Wheel } from '../game/tyres';
+import { COMPOUNDS, PIT_FAST, PIT_WRONG, WHEELS, DIR_ARROW, compoundIndex, type Compound, type Wheel } from '../game/tyres';
 import { weatherMeta, type Weather } from '../game/constants';
 import type { PitUi } from '../game/engine';
 
@@ -108,13 +108,37 @@ export function TyrePicker({ value, set, disabled }: { value: Compound; set: (c:
   );
 }
 
+// ---------------- Next tyres (during the race) ----------------
+/**
+ * Slim strip on the right edge: the tyres the crew will fit at your next stop. Defaults to the
+ * compound you're on; tap another to change it. Marked data-noswipe so taps never steer or brake.
+ */
+export function NextTyreStrip({ current, next, set, rain }: { current: number; next: number; set: (i: number) => void; rain: boolean }) {
+  return (
+    <div data-noswipe role="radiogroup" aria-label="Next tyres"
+      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 5px', borderRadius: 22, background: 'rgba(14,14,17,.55)' }}>
+      <span style={{ ...mono, fontSize: 8, letterSpacing: '.14em', color: '#8A8A92' }}>NEXT</span>
+      {COMPOUNDS.map((c, i) => {
+        const on = i === next, hint = rain ? c.id === 'wet' : false;
+        return (
+          <button type="button" role="radio" aria-checked={on} key={c.id} aria-label={'Next tyres: ' + c.name + (i === current ? ' (same as now)' : '')} onClick={() => set(i)}
+            style={{ width: 34, height: 34, borderRadius: 17, border: 0, padding: 0, cursor: 'pointer', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: on ? 1 : 0.45, transform: on ? 'scale(1.12)' : 'none', outline: on ? `2px solid ${c.color}` : hint ? '1.5px dashed #3B6CFF' : 'none', outlineOffset: 1, transition: 'opacity .12s, transform .12s' }}>
+            <TyreDot i={i} size={26} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------- Pit Stop Rush ----------------
 const WHEEL_POS: Record<Wheel, CSSProperties> = {
   FL: { top: 36, left: 4 }, FR: { top: 36, right: 4 }, RL: { bottom: 30, left: 4 }, RR: { bottom: 30, right: 4 },
 };
 
-/** The stop itself: call the tyres, then swipe each lit wheel in the direction shown. */
-export function PitStop({ pit, now, wear, carColor, call }: { pit: PitUi; now: () => number; wear: number; carColor: string; call: (i: number) => void }) {
+/** In the box: every wheel shows its arrow at once; swipe them in any order. */
+export function PitStop({ pit, now, wear, carColor }: { pit: PitUi; now: () => number; wear: number; carColor: string }) {
   const [, tick] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -123,55 +147,40 @@ export function PitStop({ pit, now, wear, carColor, call }: { pit: PitUi; now: (
     return () => cancelAnimationFrame(raf);
   }, []);
   const t = now();
-  const time = pit.phase === 'out' ? pit.time : Math.max(0, t - pit.t0);
+  const time = Math.max(0, t - pit.t0);
   const wrong = t - pit.wrongAt < 0.45;
-  const grade = time < PIT_FAST ? ['PURPLE STOP', '#A855F7'] : time < PIT_GOOD ? ['GOOD STOP', '#22C55E'] : ['SLOW STOP', '#FF8A00'];
-  const chosen = pit.chosen >= 0 ? COMPOUNDS[pit.chosen] : null;
-  const cur = pit.order[pit.idx];
-  const head = pit.phase === 'call' ? 'CALL YOUR TYRES' : pit.phase === 'wheels' ? `SWIPE ${DIR_ARROW[pit.dirs[pit.idx]]} ON ${WHEEL_NAME[cur]}` : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : grade[0];
+  const chosen = COMPOUNDS[pit.chosen] || COMPOUNDS[1];
+  const left = pit.done.filter(d => !d).length;
+  const head = wrong ? 'NO WHEEL THAT WAY +0.5s' : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : left === 4 ? 'SWIPE EVERY ARROW' : left + ' TO GO';
   return (
     <div className="screen" style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 'calc(var(--pad-top) + 78px) 20px var(--pad-bottom)', gap: 12, background: 'linear-gradient(rgba(14,14,17,.55),rgba(14,14,17,.92) 30%,rgba(14,14,17,.96))', boxSizing: 'border-box' }}>
       <div style={{ ...mono, fontSize: 13, letterSpacing: '.2em', color: '#FFD400' }}>BOX BOX · TYRES {Math.round(wear * 100)}%</div>
-      <div style={{ ...mono, fontSize: 64, fontWeight: 700, lineHeight: 1, color: pit.phase === 'out' ? grade[1] : wrong ? '#E10600' : '#F2F2F2', transition: 'color .15s' }}>
+      <div style={{ ...mono, fontSize: 64, fontWeight: 700, lineHeight: 1, color: wrong ? '#E10600' : '#F2F2F2', transition: 'color .15s' }}>
         {time.toFixed(2)}
         {pit.pen > 0 && <span style={{ fontSize: 18, color: '#E10600', marginLeft: 8 }}>+{pit.pen.toFixed(1)}</span>}
       </div>
-      {/* the car from above, four wheels around it */}
       <div aria-hidden style={{ position: 'relative', width: 220, flex: '1 1 300px', maxHeight: 330, minHeight: 210, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ width: 64, height: '82%', borderRadius: '20px 20px 12px 12px', background: carColor, boxShadow: '0 16px 40px rgba(0,0,0,.5)', position: 'relative' }}>
           <div style={{ position: 'absolute', top: -6, left: -16, right: -16, height: 10, borderRadius: 3, background: '#222' }} />
           <div style={{ position: 'absolute', bottom: -4, left: -12, right: -12, height: 12, borderRadius: 3, background: '#222' }} />
           <div style={{ position: 'absolute', top: '40%', left: 20, width: 24, height: 30, borderRadius: 12, background: '#111' }} />
         </div>
-        {(['FL', 'FR', 'RL', 'RR'] as Wheel[]).map(w => {
-          const k = pit.order.indexOf(w), done = k >= 0 && k < pit.idx, lit = pit.phase === 'wheels' && w === cur;
+        {WHEELS.map((w, i) => {
+          const done = pit.done[i];
           return (
             <div key={w} style={{ position: 'absolute', ...WHEEL_POS[w], width: 52, height: 76, borderRadius: 10, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', ...mono, fontWeight: 700,
-              background: done ? '#22C55E' : '#1A1A1E', color: done ? '#0E0E11' : lit ? (wrong ? '#E10600' : '#FFD400') : '#5A5A62',
-              border: lit ? `3px solid ${wrong ? '#E10600' : '#FFD400'}` : done && chosen ? `3px solid ${chosen.color}` : '3px solid transparent',
-              boxShadow: lit ? `0 0 22px ${wrong ? 'rgba(225,6,0,.55)' : 'rgba(255,212,0,.5)'}` : 'none', fontSize: lit ? 30 : 16, transition: 'background .12s' }}>
-              {done ? '✓' : lit ? DIR_ARROW[pit.dirs[pit.idx]] : k >= 0 ? k + 1 : ''}
+              background: done ? '#22C55E' : '#1A1A1E', color: done ? '#0E0E11' : '#FFD400', fontSize: done ? 18 : 30,
+              border: done ? `3px solid ${chosen.color}` : '3px solid #FFD400', boxShadow: done ? 'none' : '0 0 18px rgba(255,212,0,.35)', transition: 'background .1s' }}>
+              {done ? '✓' : DIR_ARROW[pit.dirs[i]]}
             </div>
           );
         })}
       </div>
-      <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1, textAlign: 'center', color: pit.phase === 'out' ? grade[1] : wrong ? '#E10600' : '#F2F2F2', minHeight: 30 }}>{wrong ? 'WRONG WAY +0.5s' : head}</div>
-      {pit.phase === 'call' ? (
-        <div role="group" aria-label="Call tyres" style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-          {COMPOUNDS.map((c, i) => (
-            <button type="button" key={c.id} onClick={() => call(i)} aria-label={'Fit ' + c.name + ' tyres'}
-              style={{ height: 72, borderRadius: 12, border: `2px solid ${i === pit.rec ? c.color : '#2A2A30'}`, background: '#151518', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer', color: '#F2F2F2', fontFamily: 'Barlow, sans-serif', fontWeight: 600, fontSize: 13, padding: 0, position: 'relative' }}>
-              <TyreDot i={i} size={30} />{c.name}
-              {i === pit.rec && <span style={{ ...mono, position: 'absolute', top: -8, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.color, color: '#0E0E11' }}>ENGINEER</span>}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div style={{ ...mono, fontSize: 12, color: '#8A8A92', textAlign: 'center', minHeight: 72, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-          {chosen && <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C8C8CE' }}><TyreDot i={pit.chosen} size={20} /> {chosen.name.toUpperCase()} GOING ON</span>}
-          <span>Under {PIT_FAST.toFixed(1)}s = +BOOST · wrong swipe +{PIT_WRONG.toFixed(1)}s</span>
-        </div>
-      )}
+      <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1, textAlign: 'center', color: wrong ? '#E10600' : '#F2F2F2', minHeight: 30 }}>{head}</div>
+      <div style={{ ...mono, fontSize: 12, color: '#8A8A92', textAlign: 'center', minHeight: 72, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C8C8CE' }}><TyreDot i={pit.chosen} size={20} /> {chosen.name.toUpperCase()} GOING ON</span>
+        <span>Any order · under {PIT_FAST.toFixed(1)}s = +BOOST · wrong swipe +{PIT_WRONG.toFixed(1)}s</span>
+      </div>
     </div>
   );
 }

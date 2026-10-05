@@ -62,10 +62,10 @@ export function recommend(laps: number, rain: boolean): Compound {
 export const PIT = {
   /** Commit window: swipe right from the right-hand line while p (mod lap) is in [WIN_FROM, ENTRY]. */
   WIN_FROM: -120,
-  ENTRY: -40,
+  ENTRY: -28,
   /** Box positions after the line; each car uses one of BOXES slots spaced SPACING apart. */
   BOX: 24, BOXES: 4, SPACING: 7,
-  EXIT: 88,
+  EXIT: 72,
   /** Lateral position of the pit lane and the limiter speed. */
   D: 11, LIMIT: 52,
   /** Pit lane edges for drawing. */
