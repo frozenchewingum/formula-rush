@@ -4,6 +4,7 @@ import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, DEFAULT_ACCEL, i
 import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
+import { trackDef } from './game/track';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
 import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, PauseMenu, CarSheet, cleanName } from './ui/screens';
@@ -54,6 +55,7 @@ export default function App() {
   const [netErr, setNetErr] = useState('');
   const [starting, setStarting] = useState(false);
   const [pb, setPb] = useState<number | null>(null);
+  const [pbTick, setPbTick] = useState(0);
   // Server capacity (one live room at a time on the free plan): polled while the Garage is open.
   const [roomBusy, setRoomBusy] = useState(false);
   const [, bump] = useState(0);
@@ -69,7 +71,7 @@ export default function App() {
     engine.onScreen = s => { screenRef.current = s; setScreenState(s); };
     engine.onFinish = f => {
       const s = sessionRef.current;
-      saveResult(f, s?.room?.id ?? null).then(() => fetchPersonalBest().then(setPb));
+      saveResult(f, s?.room?.id ?? null, engine.T.id).then(() => setPbTick(n => n + 1));
     };
     if (canvasRef.current) engine.attach(canvasRef.current);
     return () => engine.detach();
@@ -86,7 +88,14 @@ export default function App() {
     setAccel(next[0]); ls.set('fr-accel-v2', next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
   };
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
-  useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
+  // PB shown in the Garage is for the track currently picked.
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    let live = true;
+    setPb(null);
+    fetchPersonalBest(settings.track).then(v => { if (live) setPb(v); });
+    return () => { live = false; };
+  }, [settings.track, pbTick]);
   useEffect(() => {
     if (!supabaseConfigured || screen !== 'garage') return;
     let live = true;
@@ -357,15 +366,15 @@ export default function App() {
   const mp = !!engine.mp;
   const amHost = !!session?.isHost();
 
-  // Host's laps/weather are the room's settings (v1.4): push every change to the room.
+  // Host's laps/weather/track are the room's settings (v1.4, track v1.18): push every change to the room.
   // A guest promoted to host keeps the room's current settings instead of overwriting them.
   const wasHostRef = useRef(amHost);
   useEffect(() => {
     const promoted = amHost && !wasHostRef.current && !!session?.room;
     wasHostRef.current = amHost;
-    if (promoted && session?.room) { setSettings(st => ({ ...st, laps: session.room!.laps, weather: session.room!.weather })); return; }
-    if (screen === 'lobby' && amHost) session?.setSettings(settings.laps, settings.weather);
-  }, [screen, session, amHost, settings.laps, settings.weather]);
+    if (promoted && session?.room) { setSettings(st => ({ ...st, laps: session.room!.laps, weather: session.room!.weather, track: trackDef(session.room!.track).id })); return; }
+    if (screen === 'lobby' && amHost) session?.setSettings(settings.laps, settings.weather, settings.track);
+  }, [screen, session, amHost, settings.laps, settings.weather, settings.track]);
 
   // Room lobby: push car changes to your player row (everyone repaints you); a changed car un-readies you.
   useEffect(() => {

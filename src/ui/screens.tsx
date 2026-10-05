@@ -8,6 +8,8 @@ import { TyreDot, TyrePicker } from './tyres';
 import { COMPOUNDS, type Compound } from '../game/tyres';
 import type { UiState, Engine } from '../game/engine';
 import { MiniMap } from './minimap';
+import { TrackOutline } from './trackOutline';
+import { TRACKS, trackDef } from '../game/track';
 import type { SoundState } from '../audio/music';
 import type { PlayerRow, RoomSession } from '../net/room';
 
@@ -98,7 +100,7 @@ export function Garage(p: {
             {p.err || 'OFFLINE · MULTIPLAYER UNAVAILABLE'}
           </div>
         )}
-        <SettingsBar laps={p.settings.laps} weather={p.settings.weather} canEdit onClick={p.openSettings} />
+        <SettingsBar track={p.settings.track} laps={p.settings.laps} weather={p.settings.weather} canEdit onClick={p.openSettings} />
         <Btn className="primary" onClick={p.startSolo} style={{ height: 60, borderRadius: 12, justifyContent: 'space-between', padding: '0 22px', ...display, fontWeight: 800, fontSize: 28, letterSpacing: '.04em' }}>
           <span>RACE</span><span style={{ ...mono, fontSize: 12, fontWeight: 700, letterSpacing: '.1em', opacity: 0.85 }}>SOLO · VS AI →</span>
         </Btn>
@@ -219,13 +221,16 @@ export function CarSheet(p: { team: number; setTeam: (t: number) => void; livery
 }
 
 // ---------------- Race settings (v1.4) ----------------
-/** 48px bar on Garage + Lobby: LAPS · WEATHER · EDIT › (or SET BY HOST). */
-export function SettingsBar({ laps, weather, canEdit, onClick }: { laps: number; weather: Weather; canEdit: boolean; onClick: () => void }) {
+/** 48px bar on Garage + Lobby: TRACK · LAPS · WEATHER · EDIT › (or SET BY HOST). */
+export function SettingsBar({ track, laps, weather, canEdit, onClick }: { track: string; laps: number; weather: Weather; canEdit: boolean; onClick: () => void }) {
   const [, label, , dot] = weatherMeta(weather);
+  const td = trackDef(track);
   const lab: CSSProperties = { fontSize: 9, color: '#8A8A92', letterSpacing: '.16em' };
   return (
-    <button type="button" className={'settings-bar' + (canEdit ? '' : ' locked')} onClick={onClick} aria-label={`Race settings: ${laps} laps, ${label} weather${canEdit ? '' : ', set by host'}`}>
-      <span style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '.06em' }}>
+    <button type="button" className={'settings-bar' + (canEdit ? '' : ' locked')} onClick={onClick} aria-label={`Race settings: ${td.name}, ${laps} laps, ${label} weather${canEdit ? '' : ', set by host'}`}>
+      <span style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', minWidth: 0 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start', minWidth: 0 }}><span style={lab}>TRACK</span><span style={{ whiteSpace: 'nowrap' }}>{td.short}</span></span>
+        <span style={{ width: 1, height: 24, background: '#2A2A30' }} />
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}><span style={lab}>LAPS</span><span>{laps} {laps === 1 ? 'LAP' : 'LAPS'}</span></span>
         <span style={{ width: 1, height: 24, background: '#2A2A30' }} />
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}><span style={lab}>WEATHER</span><span style={{ color: dot }}>{label.toUpperCase()}</span></span>
@@ -235,7 +240,7 @@ export function SettingsBar({ laps, weather, canEdit, onClick }: { laps: number;
   );
 }
 
-/** Bottom sheet: laps + weather, plus driver tweaks (AI pace, camera tilt) folded under "More". */
+/** Bottom sheet: track, laps + weather, plus driver tweaks (AI pace, camera tilt) folded under "More". */
 type AudioPrefs = { music: boolean; engine: boolean; setMusic: (on: boolean) => void; setEngine: (on: boolean) => void };
 
 export function RaceSettingsSheet({ settings, set, close, mode, audio }: { settings: Settings; set: (s: Settings) => void; close: () => void; mode: string; audio: AudioPrefs }) {
@@ -254,6 +259,22 @@ export function RaceSettingsSheet({ settings, set, close, mode, audio }: { setti
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <div style={{ ...display, fontWeight: 800, fontSize: 30, lineHeight: 1 }}>RACE SETTINGS</div>
           <div style={{ ...mono, fontSize: 11, letterSpacing: '.12em', color: '#8A8A92' }}>{mode}</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={label}>TRACK</div>
+          <div role="radiogroup" aria-label="Track" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
+            {TRACKS.map(t => {
+              const on = settings.track === t.id;
+              return (
+                <button type="button" role="radio" aria-checked={on} aria-label={t.name} key={t.id} onClick={() => set({ ...settings, track: t.id })}
+                  style={{ borderRadius: 10, border: `1.5px solid ${on ? '#F2F2F2' : '#2A2A30'}`, background: on ? '#1E1E22' : 'transparent', color: on ? '#F2F2F2' : '#A8A8B0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '10px 4px 8px', cursor: 'pointer', boxSizing: 'border-box' }}>
+                  <TrackOutline id={t.id} size={56} color={on ? '#F2F2F2' : '#6A6A72'} />
+                  <span style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', whiteSpace: 'nowrap' }}>{t.short}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ ...mono, fontSize: 11, color: '#8A8A92', letterSpacing: '.04em' }}>{trackDef(settings.track).name.toUpperCase()} · {trackDef(settings.track).blurb.toUpperCase()}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={label}>LAPS</div>
@@ -355,7 +376,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
   const { s } = p, room = s.room!, me = s.me(), host = s.isHost();
   const slots: (PlayerRow | null)[] = [...s.players].sort((a, b) => a.slot - b.slot);
   if (s.players.length < MAX_PLAYERS) slots.push(null);
-  const laps = host ? p.settings.laps : room.laps, weather = host ? p.settings.weather : room.weather;
+  const laps = host ? p.settings.laps : room.laps, weather = host ? p.settings.weather : room.weather, track = host ? p.settings.track : trackDef(room.track).id;
   const can = s.canStart() && !p.starting;
   const racing = room.status === 'racing';
   const [shared, setShared] = useState(false);
@@ -376,7 +397,7 @@ export function Lobby(p: { s: RoomSession; settings: Settings; leave: () => void
         <button type="button" className="outline" onClick={share}>{shared ? 'Copied' : 'Share'}</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <SettingsBar laps={laps} weather={weather} canEdit={host} onClick={p.openSettings} />
+        <SettingsBar track={track} laps={laps} weather={weather} canEdit={host} onClick={p.openSettings} />
         <div style={{ ...mono, fontSize: 12, color: '#8A8A92' }}>DRIVERS {s.players.length}/{MAX_PLAYERS} · {GRID_SIZE - s.players.length} AI</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0, overflowY: 'auto' }}>

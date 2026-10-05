@@ -70,7 +70,7 @@ function PitArt() {
 const STEPS: Step[] = [
   {
     title: 'Pick your car', img: 'garage', alt: 'The Garage: team colours, Swipe or Tilt, and the RACE button',
-    body: <>Choose a team colour and <Y c="#F2F2F2">Swipe</Y> or <Y c="#F2F2F2">Tilt</Y> controls. Tap <Y c="#E10600">RACE</Y> to take on {GRID_SIZE - 1} AI drivers. Feeling brave? Turn up the AI in race settings: the higher you go, the less they give away.</>,
+    body: <>Choose a team colour and <Y c="#F2F2F2">Swipe</Y> or <Y c="#F2F2F2">Tilt</Y> controls. Tap <Y c="#E10600">RACE</Y> to take on {GRID_SIZE - 1} AI drivers. Race settings has three circuits to explore, each with its own character. Feeling brave? Turn up the AI too: the higher you go, the less they give away.</>,
   },
   {
     title: 'Nail the launch', img: 'launch', alt: 'Holding the screen through five red lights and letting go on green',

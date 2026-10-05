@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.18** · Three circuits: Rush Park (the original), Monsoon Park and Harbour Streets. The host's pick syncs to the room; best laps are per track. **v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. Player-facing text and the play guide reworded to drop numbers and hints, leaving more to discover. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -10,7 +10,7 @@ Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-la
 
 | | |
 |---|---|
-| <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Spin the 3D car, pick a team (‹ › or the TEAM tab), a livery and an accent colour, choose Swipe or Tilt, set laps, weather and AI difficulty, then tap **RACE** to take on 11 AI drivers. The higher the AI, the less they give away. |
+| <img src="public/guide/garage.webp" width="160" alt="Garage"> | **1. Pick your car.** Spin the 3D car, pick a team (‹ › or the TEAM tab), a livery and an accent colour, choose Swipe or Tilt, set the track, laps, weather and AI difficulty, then tap **RACE** to take on 11 AI drivers. The higher the AI, the less they give away. |
 | <img src="public/guide/launch.webp" width="160" alt="Launch"> | **2. Nail the launch.** The five red lights count down by themselves with a beep each. Rev freely (hold to rev, let go to lift). When they turn green, let go: the quicker you react, the better the getaway, and a **Perfect** one comes with a little something extra. Hesitate and you bog down. |
 | <img src="public/guide/lines.webp" width="160" alt="Lines and apexes"> | **3. Change lines, hit apexes.** Swipe left/right between three lines. Drive through the yellow rings on the inside of corners to fill boost. |
 | <img src="public/guide/boost.webp" width="160" alt="Boost"> | **4. Boost.** Swipe up (↑ / Space) once the bar passes the notch for a burst of speed. Use it wisely. |
@@ -89,6 +89,18 @@ Three acceleration feels for play-testing (`accelRate` in `src/game/constants.ts
 | **Gentle** (default since v1.10) | softer version of Curve | ~4.9 s |
 
 Long-press the **FORMULA RUSH** logo in the Garage (~0.7 s) to cycle modes. The current mode shows under the car when it isn't the default. Only an explicit choice is remembered (`fr-accel-v2`); the old `fr-accel` key, which earlier builds wrote for every player, is ignored so everyone moves to Gentle. `?accel=classic|curve|gentle` in the URL also works. AI cars use the same mode, about 8% softer as before. In a room, each client simulates its own car, and the host's mode drives the AI.
+
+## Tracks
+
+Layouts live in `TRACKS` (`src/game/track.ts`) as Catmull-Rom control points, driven in point order with start/finish at the first point. Corners, kerbs, apexes and DRS zones are found from the curvature, so a new track needs only its points. Keep the first stretch straight from ~130 units before the line to ~90 after (pit lane on the right), and keep separate parts of the track at least ~55 units apart so grass never covers road.
+
+| | Rush Park | Monsoon Park | Harbour Streets |
+|---|---|---|---|
+| Inspired by | original | Sepang: two parallel straights joined by a hairpin, T1 hairpin into a left kink, fast esses | Monaco: uphill sweep, hotel hairpin, tunnel curve, swimming-pool chicanes |
+| Lap length | 1815 | 2379 | 2313 |
+| Lap (sim, Hard tyres) | ~31 s | ~43 s | ~44 s |
+
+The room's track is `fr_rooms.track` (host edits it with `fr_set_room(..., p_track)`), and the start message carries it so every client builds the same circuit. Results store `track_id`; best laps were already per track (`fr_best_laps`). The Garage PB is for the selected track.
 
 ## Tyres & pit stops
 

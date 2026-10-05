@@ -4,9 +4,9 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, ensureUser, estimateClockOffset, errText, rpcOnUnload } from './supabase';
 import { buildMpGrid, makeRainPlan, type MpStart, type StateMsg, type FinishMsg, type NetLink } from '../game/engine';
 import { MIN_PLAYERS, isLivery, type Settings, type Weather } from '../game/constants';
-import { TRACK_L } from '../game/trackInfo';
+import { trackLength } from '../game/trackInfo';
 
-export type RoomRow = { id: string; code: string; host_id: string; status: 'lobby' | 'racing' | 'closed'; laps: number; weather: Weather };
+export type RoomRow = { id: string; code: string; host_id: string; status: 'lobby' | 'racing' | 'closed'; laps: number; weather: Weather; track?: string };
 export type PlayerRow = { room_id: string; user_id: string; slot: number; name: string; team: number; livery?: string; accent?: number; ready: boolean; joined_at: string };
 
 type Handlers = {
@@ -67,7 +67,7 @@ export class RoomSession implements NetLink {
   static async create(h: Handlers, name: string, team: number, settings: Settings) {
     const s = new RoomSession(h);
     s.myId = await ensureUser();
-    const { data, error } = await supabase!.rpc('fr_create_room', { p_name: name, p_team: team, p_laps: settings.laps, p_weather: settings.weather });
+    const { data, error } = await supabase!.rpc('fr_create_room', { p_name: name, p_team: team, p_laps: settings.laps, p_weather: settings.weather, p_track: settings.track });
     if (error) throw new Error(errText(error));
     await s.open(data as RoomRow);
     return s;
@@ -209,13 +209,13 @@ export class RoomSession implements NetLink {
     await supabase!.from('fr_room_players').update(patch).eq('room_id', this.room.id).eq('user_id', this.myId);
   }
 
-  /** Host: push laps/weather to the room row; guests pick it up via postgres_changes. */
-  async setSettings(laps: number, weather: Weather) {
+  /** Host: push laps/weather/track to the room row; guests pick it up via postgres_changes. */
+  async setSettings(laps: number, weather: Weather, track: string) {
     if (!this.room || !this.isHost() || this.room.status !== 'lobby') return;
-    if (this.room.laps === laps && this.room.weather === weather) return;
-    this.room = { ...this.room, laps, weather };
+    if (this.room.laps === laps && this.room.weather === weather && this.room.track === track) return;
+    this.room = { ...this.room, laps, weather, track };
     this.h.onChange();
-    const { error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: null, p_laps: laps, p_weather: weather });
+    const { error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: null, p_laps: laps, p_weather: weather, p_track: track });
     if (error) console.warn('fr_set_room', errText(error));
   }
 
@@ -226,7 +226,7 @@ export class RoomSession implements NetLink {
   /** Host: lock the room, build the shared grid + weather, and schedule a common green light. */
   async hostStart(settings: Settings) {
     if (!this.room || !this.canStart()) return;
-    const { data, error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: 'racing', p_laps: settings.laps, p_weather: settings.weather });
+    const { data, error } = await supabase!.rpc('fr_set_room', { p_room: this.room.id, p_status: 'racing', p_laps: settings.laps, p_weather: settings.weather, p_track: settings.track });
     if (error) throw new Error(errText(error));
     this.room = data as RoomRow;
     const humans = this.players.map(p => ({ userId: p.user_id, name: p.name, team: p.team, livery: isLivery(p.livery) ? p.livery : undefined, accent: p.accent ?? 0 }));
@@ -234,11 +234,12 @@ export class RoomSession implements NetLink {
     const msg: MpStart = {
       grid: buildMpGrid(humans, settings.aiPace),
       laps: settings.laps,
-      rainPlan: makeRainPlan(settings.weather, settings.laps, TRACK_L),
+      rainPlan: makeRainPlan(settings.weather, settings.laps, trackLength(settings.track)),
       lightsDelay,
       greenAt: this.serverNow() + 1500 + 4 * 700 + lightsDelay,
       hostId: this.myId,
       ai: settings.aiPace,
+      track: settings.track,
     };
     this.ch?.send({ type: 'broadcast', event: 'start', payload: msg });
     this.h.onStart(msg);
