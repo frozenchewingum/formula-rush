@@ -82,10 +82,12 @@ export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', a
 
 export const PACE: Record<AiPace, number> = { Easy: 0.9, Normal: 0.955, Hard: 0.995 };
 
-// ---------- Acceleration feel (hidden test toggle: long-press the logo, or ?accel=classic|curve|gentle) ----------
+// ---------- Acceleration feel (default Gentle; hidden toggle: long-press the logo, or ?accel=classic|curve|gentle) ----------
 export type AccelModel = 'classic' | 'curve' | 'gentle';
 export const ACCEL_MODELS: [AccelModel, string][] = [['classic', 'CLASSIC'], ['curve', 'CURVE'], ['gentle', 'GENTLE']];
 export const isAccelModel = (v: unknown): v is AccelModel => ACCEL_MODELS.some(m => m[0] === v);
+/** Picked after play-testing (v1.10). */
+export const DEFAULT_ACCEL: AccelModel = 'gentle';
 /**
  * Acceleration in units/s² at speed v towards speed cap `top`.
  * classic: constant (0–300 km/h ≈ 2.8 s). curve/gentle: pulls hard out of corners and fades

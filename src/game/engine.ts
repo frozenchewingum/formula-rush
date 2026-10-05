@@ -1,7 +1,7 @@
 // Formula Rush game engine: a direct port of the v1 prototype's Component class.
 // Pure TS (no React). UI subscribes to `engine.ui` through `subscribe()`.
 import {
-  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate,
+  TEAMS, LANE, HALF, VMAX, GRID_SLOT, GRID_SIZE, PACE, clamp, fmt, buzz, sendInterval, racePaint, accelRate, DEFAULT_ACCEL,
   type Settings, type Controls, type Livery, type AccelModel, DEFAULT_SETTINGS,
 } from './constants';
 import { buildTrack, trackAt, type Track } from './track';
@@ -112,7 +112,7 @@ export class Engine {
   /** Starting tyres picked before the race (v1.5). */
   startCompound: Compound = 'medium';
   /** Acceleration feel under test (v1.8 hidden toggle). */
-  accelModel: AccelModel = 'classic';
+  accelModel: AccelModel = DEFAULT_ACCEL;
   screen: Screen = 'garage';
   ui: UiState;
   net: NetLink | null = null;

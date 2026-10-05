@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Engine, type Screen, type MpStart } from './game/engine';
-import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, isLivery, isAccelModel, type Controls, type Settings, type Livery, type AccelModel } from './game/constants';
+import { clamp, DEFAULT_SETTINGS, TEAMS, ACCENTS, ACCEL_MODELS, DEFAULT_ACCEL, isLivery, isAccelModel, type Controls, type Settings, type Livery, type AccelModel } from './game/constants';
 import { RoomSession } from './net/room';
 import { Music, type Scene } from './audio/music';
 import { supabaseConfigured } from './net/supabase';
@@ -35,10 +35,13 @@ export default function App() {
   const [showTyres, setShowTyres] = useState(false);
   const [showCar, setShowCar] = useState(false);
   const closeCar = useCallback(() => setShowCar(false), []);
-  // Hidden acceleration test toggle: ?accel=… in the URL, or long-press the logo in the Garage.
+  // Acceleration feel: Gentle by default (v1.10). Hidden toggle: long-press the logo in the Garage, or ?accel=….
+  // Only an explicit choice is saved ('fr-accel-v2'); the old 'fr-accel' key was written for everyone, so it's ignored.
   const [accel, setAccel] = useState<AccelModel>(() => {
-    const q = new URLSearchParams(location.search).get('accel'), v = q || ls.get('fr-accel');
-    return isAccelModel(v) ? v : 'classic';
+    const q = new URLSearchParams(location.search).get('accel');
+    if (isAccelModel(q)) { ls.set('fr-accel-v2', q); return q; }
+    const v = ls.get('fr-accel-v2');
+    return isAccelModel(v) ? v : DEFAULT_ACCEL;
   });
   const closeTyres = useCallback(() => setShowTyres(false), []);
   const [showSettings, setShowSettings] = useState(false);
@@ -75,10 +78,10 @@ export default function App() {
   useEffect(() => { engine.accent = accent; ls.set('fr-accent', String(accent)); }, [engine, accent]);
   useEffect(() => { engine.controls = controls; ls.set('fr-controls', controls); }, [engine, controls]);
   useEffect(() => { engine.startCompound = tyre; ls.set('fr-tyre', tyre); }, [engine, tyre]);
-  useEffect(() => { engine.accelModel = accel; ls.set('fr-accel', accel); }, [engine, accel]);
+  useEffect(() => { engine.accelModel = accel; }, [engine, accel]);
   const cycleAccel = () => {
     const i = ACCEL_MODELS.findIndex(m => m[0] === accel), next = ACCEL_MODELS[(i + 1) % ACCEL_MODELS.length];
-    setAccel(next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
+    setAccel(next[0]); ls.set('fr-accel-v2', next[0]); engine.toast('ACCEL · ' + next[1], '#A855F7');
   };
   useEffect(() => { engine.settings = settings; ls.set('fr-settings', JSON.stringify(settings)); }, [engine, settings]);
   useEffect(() => { if (supabaseConfigured) fetchPersonalBest().then(setPb); }, []);
@@ -358,7 +361,7 @@ export default function App() {
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
             startSolo={startSolo} createRoom={createRoom} openJoin={() => { setJoinCode(''); setJoinErr(''); setScreen('join'); }}
             openSettings={openSettings} openGuide={() => setShowGuide(true)} sound={music.state} armSound={armSound} toggleSound={toggleSound}
-            accel={accel === 'classic' ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
+            accel={accel === DEFAULT_ACCEL ? '' : ACCEL_MODELS.find(m => m[0] === accel)![1]} secret={cycleAccel} busy={busy} err={netErr} pb={pb} online={supabaseConfigured} />
         )}
         {screen === 'garage' && showGuide && <Guide close={closeGuide} />}
         {(screen === 'garage' || (screen === 'lobby' && amHost)) && showSettings && (
