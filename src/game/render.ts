@@ -46,8 +46,11 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     vis[i] = false;
     if (z < -60 || z > range || Math.abs(x) > 70 + 0.7 * Math.max(z, 0)) continue;
     let ok = true;
+    // v1.21: road edges and kerbs follow the road width; lane lines follow the lane count.
+    const sw = T.hw[i] / 7.5, nl = T.lanes[i];
     for (let o = 0; o < NO; o++) {
-      const p = proj(T.x[i] + T.nx[i] * O[o], T.y[i] + T.ny[i] * O[o]);
+      const off = o >= 4 && o <= 7 ? (nl === 3 ? O[o] : nl === 2 ? (o & 1 ? 0.1 : -0.1) : 0) : o >= 1 && o <= 10 ? O[o] * sw : O[o];
+      const p = proj(T.x[i] + T.nx[i] * off, T.y[i] + T.ny[i] * off);
       S[o][i] = p; if (!p) ok = false;
     }
     vis[i] = ok;
@@ -74,7 +77,24 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     } else {
       ctx.fillStyle = '#C8C8CE'; quad(2, 3, i, j); ctx.fill(); quad(8, 9, i, j); ctx.fill();
     }
-    if (i % 5 < 2) { ctx.fillStyle = 'rgba(255,255,255,.22)'; quad(4, 5, i, j); ctx.fill(); quad(6, 7, i, j); ctx.fill(); }
+    if (i % 5 < 2 && T.lanes[i] > 1 && T.lanes[j] === T.lanes[i]) { ctx.fillStyle = 'rgba(255,255,255,.22)'; quad(4, 5, i, j); ctx.fill(); if (T.lanes[i] === 3) { quad(6, 7, i, j); ctx.fill(); } }
+  }
+  // Narrowing ahead (v1.21): yellow chevrons on both edges pointing in, where the lanes run out.
+  ctx.fillStyle = 'rgba(255,212,0,.85)';
+  for (let b = 0; b < T.N; b++) {
+    if (T.lanes[b] >= T.lanes[(b - 1 + T.N) % T.N]) continue;
+    for (let n = 0; n < 3; n++) {
+      const i = (b - 3 - n * 4 + T.N) % T.N, j = (i + 2) % T.N;
+      if (!vis[i] || !vis[j]) continue;
+      for (const side of [-1, 1]) {
+        const w = T.hw[i], m = (i + 1) % T.N;
+        const a = proj(T.x[i] + T.nx[i] * (w - 0.6) * side, T.y[i] + T.ny[i] * (w - 0.6) * side);
+        const t = proj(T.x[m] + T.nx[m] * (w - 2.8) * side, T.y[m] + T.ny[m] * (w - 2.8) * side);
+        const c = proj(T.x[j] + T.nx[j] * (w - 0.6) * side, T.y[j] + T.ny[j] * (w - 0.6) * side);
+        if (!a || !t || !c) continue;
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(t[0], t[1]); ctx.lineTo(c[0], c[1]); ctx.closePath(); ctx.fill();
+      }
+    }
   }
   // Brake boards 3 · 2 · 1 on the outside of each corner that needs braking (v1.20).
   for (const b of T.brakes) {
@@ -84,7 +104,8 @@ export function drawWorld(e: Engine, cv: HTMLCanvasElement, dt: number) {
     for (let n = 0; n < 3; n++) {
       const i = (b - n * 6 + T.N) % T.N, j = (i + 2) % T.N;
       if (!vis[i] || !vis[j]) continue;
-      const pts = [[9.6, i], [15, i], [15, j], [9.6, j]].map(([o, k]) => proj(T.x[k] + T.nx[k] * o * side, T.y[k] + T.ny[k] * o * side));
+      const w = T.hw[i];
+      const pts = [[w + 2.1, i], [w + 7.5, i], [w + 7.5, j], [w + 2.1, j]].map(([o, k]) => proj(T.x[k] + T.nx[k] * o * side, T.y[k] + T.ny[k] * o * side));
       if (pts.some(p => !p)) continue;
       ctx.beginPath(); pts.forEach((p, m) => m ? ctx.lineTo(p![0], p![1]) : ctx.moveTo(p![0], p![1])); ctx.closePath();
       ctx.fillStyle = '#F2F2F2'; ctx.fill(); ctx.strokeStyle = '#0E0E11'; ctx.lineWidth = 1; ctx.stroke();
