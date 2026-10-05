@@ -79,7 +79,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Change lines, hit apexes', img: 'lines', alt: 'Swiping right twice to reach a yellow apex ring',
-    body: <><Y c="#F2F2F2">Swipe left or right</Y> to move between racing lines. The road changes width as you go: wide stretches open up room to pass, and where <Y c="#FFD400">yellow arrows</Y> appear it squeezes down, so pick your moment. Drive through the <Y c="#FFD400">yellow rings</Y> on the inside of corners to fill your boost.</>,
+    body: <><Y c="#F2F2F2">Swipe left or right</Y> to move between racing lines. The road changes width as you go: wide stretches open up room to pass, and where it squeezes down, pick your moment. Drive through the <Y c="#FFD400">yellow rings</Y> on the inside of corners to fill your boost.</>,
     keys: '← →',
   },
   {
