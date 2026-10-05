@@ -430,7 +430,7 @@ export function RaceHud({ ui, tilt }: { ui: UiState; tilt: boolean }) {
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '48px 18px var(--pad-bottom)', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(transparent,rgba(14,14,17,.95) 45%)', pointerEvents: 'none' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {h.boxCall && <div className="pulse" style={{ ...chip, background: h.boxCall === 'BOX FOR WETS' ? '#3B6CFF' : '#FFD400', color: h.boxCall === 'BOX FOR WETS' ? '#F2F2F2' : '#0E0E11' }}>{h.boxCall}</div>}
+            {h.boxCall && <div className="pulse" style={{ ...chip, background: h.boxCall.startsWith('TYRE') ? '#E10600' : h.boxCall === 'BOX FOR WETS' ? '#3B6CFF' : '#FFD400', color: h.boxCall.startsWith('TYRE') || h.boxCall === 'BOX FOR WETS' ? '#F2F2F2' : '#0E0E11' }}>{h.boxCall}</div>}
             {h.pitWindow && <div style={{ ...chip, border: '1.5px solid #FFD400', color: '#FFD400' }}>PIT {tilt ? '· STEER →' : '· SWIPE →'}</div>}
             {h.limiter && <div style={{ ...chip, background: '#FFD400', color: '#0E0E11' }}>PIT LIMITER</div>}
             {h.drsReady && <div style={{ ...chip, border: '1.5px solid #00D2BE', color: '#00D2BE' }}>DRS READY · ↑</div>}

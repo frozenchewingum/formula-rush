@@ -8,7 +8,7 @@ import { buildTrack, trackAt, type Track } from './track';
 import { drawWorld } from './render';
 import type { EngineInput } from '../audio/engineSound';
 import {
-  PIT, CLIFF, BOX_CALL, PIT_FAST, PIT_WRONG, WHEELS, DIRS, COMPOUNDS, spec, tyrePerf, wearRate, recommend, compoundIndex,
+  PIT, CLIFF, BOX_CALL, FAILED, PIT_FAST, PIT_WRONG, WHEELS, DIRS, COMPOUNDS, spec, tyrePerf, wearRate, recommend, compoundIndex,
   type Compound, type Wheel, type Dir,
 } from './tyres';
 
@@ -27,7 +27,7 @@ export type Car = {
   tc: number; wear: number;
   /** Pit state: 0 racing · 1 pit lane to box · 2 stopped · 3 pit lane to exit · 4 merging back. */
   pit: number; lineP: number; boxP: number; outP: number; pitHold: number; pitT0: number; pitChecked: number;
-  stops: number; bestPit: number; stints: number[]; boxCalled: boolean;
+  stops: number; bestPit: number; stints: number[]; boxCalled: boolean; failCalled: boolean;
 };
 type Snap = { t: number; p: number; d: number; v: number; y: number };
 
@@ -200,7 +200,7 @@ export class Engine {
         boostOn: false, drsOn: false, brakeOn: false, dnf: false, snaps: [],
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
         pit: 0, lineP: 0, boxP: 0, outP: 0, pitHold: 0, pitT0: 0, pitChecked: -1,
-        stops: 0, bestPit: 0, stints: [], boxCalled: false,
+        stops: 0, bestPit: 0, stints: [], boxCalled: false, failCalled: false,
       };
     });
     for (const c of cars) c.stints.push(c.tc);
@@ -430,7 +430,7 @@ export class Engine {
     return target;
   }
   private fitTyres(c: Car, tc: number, stopTime: number) {
-    c.tc = tc; c.wear = 1; c.pit = 3; c.boxCalled = false; c.stops++;
+    c.tc = tc; c.wear = 1; c.pit = 3; c.boxCalled = false; c.failCalled = false; c.stops++;
     if (!c.bestPit || stopTime < c.bestPit) c.bestPit = stopTime;
     if (c.isPlayer) c.stints.push(tc); // AI cars record their next stint when they decide to stop
   }
@@ -691,6 +691,9 @@ export class Engine {
     if (!pl.boxCalled && !pl.pit && pl.wear < BOX_CALL && this.lapsAfterLine(pl.p) >= 1) {
       pl.boxCalled = true; this.toast('BOX BOX', '#FFD400'); buzz([40, 40, 40]);
     }
+    if (!pl.failCalled && !pl.pit && pl.wear < FAILED) {
+      pl.failCalled = true; this.toast('TYRE FAILURE', '#E10600'); buzz([120, 60, 120]); g.shake = 0.4;
+    }
     if (pl.pit) return; // pit lane: no contact, no walls
     for (const o of g.cars) {
       if (o === pl || pl.contactT > 0 || o.pit || Math.abs(o.d) > HALF + 0.5) continue;
@@ -786,7 +789,9 @@ export class Engine {
   /** Team radio line shown on the HUD while a stop makes sense. */
   private boxCall(rain: boolean) {
     const pl = this.g.player;
-    if (pl.pit || pl.finished || this.lapsAfterLine(pl.p) < 1) return '';
+    if (pl.pit || pl.finished) return '';
+    if (pl.wear < FAILED) return this.lapsAfterLine(pl.p) >= 1 ? 'TYRE FAILURE · BOX' : 'TYRE FAILURE';
+    if (this.lapsAfterLine(pl.p) < 1) return '';
     const wets = spec(pl.tc).id === 'wet';
     if (rain && !wets) return 'BOX FOR WETS';
     if (!rain && wets) return 'BOX FOR SLICKS';
