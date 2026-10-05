@@ -1,6 +1,6 @@
 # Formula Rush
 
-**v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
+**v1.17** · Harder Hard and Expert AI: they earn and use boost at apexes like you, defend their line, and run a tighter, faster field. **v1.16** · AI difficulty Easy / Normal / Hard / Expert: levels now differ in pace, cornering, launches and racecraft (Normal+ AI slipstream, Hard+ use DRS). **v1.15** · Mini map above the lap counter: every car on track, online drivers as ◆, AI as ●, you ringed in yellow. **v1.14** · 3D Pit Stop Rush: 8 taps, gun off / gun on per wheel. **v1.13** · Quicker Pit Stop Rush: pick next tyres while racing, all arrows at once, no result screen, shorter pit lane. **v1.12** · Refresh leaves the room (empty rooms close at once); your own room never shows Room busy. **v1.11** · 6-driver rooms with host relay, one room at a time. **v1.10** · Gentle acceleration by default, countdown launch with beeps, solo pause menu, edit your car in room lobbies. **v1.9** · Worn tyres fail; cheaper pit stops. **v1.7** · More realistic engine sound (combustion-pulse synthesis). **v1.6** · Engine sound and a sound-start fix. **v1.5** · Tyre compounds and Pit Stop Rush. See [Tyres & pit stops](#tyres--pit-stops). v1.4: Garage v2 (3D car, liveries, accents) and race settings sheet.
 
 Portrait mobile F1 racer. One-thumb controls, hybrid chase/top-down camera, 3-lap races on a 12-car grid (11 teams), and 2–6 human drivers per room over Supabase Realtime; AI fills the rest of the grid.
 
@@ -183,10 +183,19 @@ Set in `AI` (`src/game/constants.ts`). In rooms the host's level travels with th
 
 | | Easy | Normal | Hard | Expert |
 |---|---|---|---|---|
-| Top speed vs you | 88% | 94.5% | 98.5% | 101.5% |
-| Cornering grip vs you | 92% | 97% | 100% | 104% |
-| Takes the racing line | 25% | 55% | 80% | 95% |
-| Launch reaction | 0.35–0.75 s | 0.15–0.45 s | 0.10–0.28 s | 0.06–0.16 s |
+| Top speed vs you | 88% | 94.5% | 101% | 103% |
+| Cornering grip vs you | 92% | 97% | 103.5% | 106% |
+| Takes the racing line | 25% | 55% | 88% | 97% |
+| Launch reaction | 0.35–0.75 s | 0.15–0.45 s | 0.08–0.20 s | 0.05–0.13 s |
 | Slipstream / DRS | – / – | ✓ / – | ✓ / ✓ | ✓ / ✓ |
+| Boost per apex hit (you: 30) | – | – | 24 | 30 |
+| Covers your line when you close in | – | – | sometimes | often |
 
-Rough guide from a scripted driver (3 laps, dry, one stop): Easy is a near-certain win, Normal a podium, Hard mid-pack unless you work boost and apexes, Expert wins only on a clean race with boost, apexes and DRS.
+AI boost follows your rules: it fills at apexes the AI actually hits, a burst costs 35 and lasts 1.6 s, and boosting wears its tyres faster too. Defending AI only move into a free lane, never into a car.
+
+Balance (v1.17, headless sim, 3 laps dry, one stop, scripted driver starting last). A *good* driver hits ~60% of apexes and uses every boost and DRS chance; a *casual* one hits ~45% and rarely boosts:
+
+| | Hard | Expert |
+|---|---|---|
+| Good driver | avg P4, wins ~1 in 6, podium ~1 in 2 | avg P6, wins ~1 in 20 |
+| Casual driver | avg P11 | avg P12 |
