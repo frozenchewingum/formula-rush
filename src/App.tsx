@@ -167,6 +167,7 @@ export default function App() {
     onPlayerGone: (id: string) => engine.dropPlayer(id),
     onClosed: (reason: string) => {
       sessionRef.current = null; engine.net = null;
+      try { sessionStorage.removeItem('fr-room'); } catch { /* storage blocked */ }
       if (screenRef.current === 'lobby') { setNetErr(reason); engine.resetRace(); setScreen('garage'); }
     },
   }), [engine, setScreen]);
@@ -175,6 +176,8 @@ export default function App() {
     ls.set('fr-name', s.me()?.name || name());
     sessionRef.current = s; engine.net = s;
     s.updateMe({ livery, accent });
+    // Remember the room for this tab so a refresh can slip back in (see the rejoin effect below).
+    try { if (s.room) sessionStorage.setItem('fr-room', s.room.code); } catch { /* storage blocked */ }
     engine.resetRace(); setScreen('lobby');
     if (location.search) history.replaceState(null, '', location.pathname);
   };
@@ -193,6 +196,7 @@ export default function App() {
     finally { setBusy(''); }
   };
   const leaveRoom = async () => {
+    try { sessionStorage.removeItem('fr-room'); } catch { /* storage blocked */ }
     const s = sessionRef.current;
     sessionRef.current = null; engine.net = null;
     engine.resetRace(); setScreen('garage');
@@ -215,10 +219,25 @@ export default function App() {
     document.addEventListener('visibilitychange', hide);
     return () => document.removeEventListener('visibilitychange', hide);
   }, [engine]);
+  // Refresh / closing the tab: leave the room right away, so a room left empty closes (and frees the
+  // server slot) instead of lingering until its heartbeat times out.
   useEffect(() => {
-    const leave = () => { sessionRef.current?.close(); };
+    const leave = () => { sessionRef.current?.leaveOnUnload(); sessionRef.current = null; };
     window.addEventListener('pagehide', leave);
     return () => window.removeEventListener('pagehide', leave);
+  }, []);
+  // After a refresh, slip back into the room if it's still going (others were in it); if you were
+  // alone it has closed and you land in the Garage.
+  useEffect(() => {
+    let code: string | null = null;
+    try { code = sessionStorage.getItem('fr-room'); } catch { /* storage blocked */ }
+    if (!code || !supabaseConfigured || location.search.includes('room=')) return;
+    // Wait a moment so the previous page's leave request lands first.
+    const t = window.setTimeout(() => {
+      RoomSession.join(handlers, code!, name(), team).then(enterRoom, () => { try { sessionStorage.removeItem('fr-room'); } catch { /* storage blocked */ } });
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------- input (ported from prototype bindInput) ----------
@@ -318,6 +337,7 @@ export default function App() {
   function startSolo() { setShowTyres(true); }
   function goSolo() {
     setShowTyres(false);
+    try { sessionStorage.removeItem('fr-room'); } catch { /* storage blocked */ }
     const s = sessionRef.current;
     if (s) { sessionRef.current = null; engine.net = null; s.leave(); }
     engine.startRace(null);

@@ -1,7 +1,7 @@
 // Room session: Postgres for membership (4-player cap enforced server-side),
 // Realtime channel race:{roomId} for presence, start/state/finish broadcasts.
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase, ensureUser, estimateClockOffset, errText } from './supabase';
+import { supabase, ensureUser, estimateClockOffset, errText, rpcOnUnload } from './supabase';
 import { buildMpGrid, makeRainPlan, type MpStart, type StateMsg, type FinishMsg, type NetLink } from '../game/engine';
 import { MIN_PLAYERS, isLivery, type Settings, type Weather } from '../game/constants';
 import { TRACK_L } from '../game/trackInfo';
@@ -176,6 +176,12 @@ export class RoomSession implements NetLink {
         this.h.onPlayerGone(p.user_id);
       }
     }
+  }
+
+  /** Page is closing (refresh / tab closed): leave the room so an empty room closes straight away. */
+  leaveOnUnload() {
+    if (this.room) rpcOnUnload('fr_leave_room', { p_room: this.room.id });
+    this.close();
   }
 
   async leave() {

@@ -14,6 +14,27 @@ export const supabase: SupabaseClient | null = supabaseConfigured
 
 let userPromise: Promise<string> | null = null;
 
+// Latest access token, kept in step with the session so it can be used while the page is closing.
+let accessToken: string | null = null;
+if (supabase) {
+  supabase.auth.getSession().then(({ data }) => { accessToken = data.session?.access_token ?? null; });
+  supabase.auth.onAuthStateChange((_e, s) => { accessToken = s?.access_token ?? null; });
+}
+
+/**
+ * Fire-and-forget RPC that still goes out while the page is unloading (refresh, closing the tab):
+ * a keepalive fetch, because the supabase client's own requests are cancelled at that point.
+ */
+export function rpcOnUnload(fn: string, args: Record<string, unknown>) {
+  if (!url || !key || !accessToken) return;
+  try {
+    fetch(`${url}/rest/v1/rpc/${fn}`, {
+      method: 'POST', keepalive: true, body: JSON.stringify(args),
+      headers: { apikey: key, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    }).catch(() => {});
+  } catch { /* unsupported */ }
+}
+
 /** Anonymous sign-in; the session persists in localStorage so the same driver id survives reloads. */
 export function ensureUser(): Promise<string> {
   if (!supabase) return Promise.reject(new Error('OFFLINE · SUPABASE NOT CONFIGURED'));
@@ -49,7 +70,7 @@ export function errText(e: unknown): string {
   const m = (e as { message?: string })?.message || String(e);
   const full = m.match(/ROOM FULL \(\d+\/\d+\)/);
   if (full) return full[0];
-  for (const k of ['ROOM NOT FOUND', 'RACE IN PROGRESS', 'NOT HOST', 'NO FREE CODE']) if (m.includes(k)) return k;
+  for (const k of ['ROOM NOT FOUND', 'RACE IN PROGRESS', 'NOT HOST', 'NO FREE CODE', 'SERVER BUSY · A ROOM IS ALREADY RUNNING']) if (m.includes(k)) return k;
   if (/anonymous/i.test(m)) return 'ENABLE ANONYMOUS SIGN-INS IN SUPABASE';
   if (/fetch|network/i.test(m)) return 'NETWORK ERROR';
   return m.toUpperCase().slice(0, 60);
