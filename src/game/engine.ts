@@ -324,7 +324,7 @@ export class Engine {
     } else if (r <= LAUNCH_OK) {
       pl.startDelay = r; text = r.toFixed(3) + 's';
     } else {
-      pl.startDelay = r + LAUNCH_BOG; text = 'LATE START +' + LAUNCH_BOG.toFixed(1) + 's'; buzz([80, 40, 80]);
+      pl.startDelay = r + LAUNCH_BOG; text = 'LATE START'; buzz([80, 40, 80]);
     }
     this.set({ reaction: text });
     this.later(() => this.setScreen('race'), 900);
@@ -517,7 +517,7 @@ export class Engine {
       this.fitTyres(pl, p.chosen, time);
       this.nextTyre = null;
       this.set({ pit: null });
-      if (time < PIT_FAST) { g.boost = Math.min(100, g.boost + 25); this.toast(time.toFixed(2) + 's · FAST STOP +BOOST', '#A855F7'); }
+      if (time < PIT_FAST) { g.boost = Math.min(100, g.boost + 25); this.toast(time.toFixed(2) + 's · FAST STOP', '#A855F7'); }
       else this.toast(time.toFixed(2) + 's STOP', time < PIT_GOOD ? '#22C55E' : '#FF8A00');
       buzz(40);
     }
@@ -527,7 +527,7 @@ export class Engine {
   private step(dt: number) {
     const g = this.g, T = this.T, pl = g.player, rain = this.isRain(), L = LANE;
     if (!this.mp) g.t += dt;
-    if (rain && !g.rainWas && g.t > 2) this.toast('RAIN · GRIP LOW', '#3B6CFF');
+    if (rain && !g.rainWas && g.t > 2) this.toast('RAIN', '#3B6CFF');
     if (!rain && g.rainWas && g.t > 2) this.toast('TRACK DRYING', '#F2F2F2');
     g.rainWas = rain;
     for (const c of g.cars) { const a = trackAt(T, c.p); c.k = a.k; c.i = a.i; }
@@ -790,7 +790,7 @@ export class Engine {
           pl.dTarget = clamp(Math.round(pl.d / LANE) + away, -1, 1) * LANE;
         }
         pl.contactT = 1.0; g.contacts++; g.shake = 0.35; pl.wear = Math.max(0, pl.wear - 0.03);
-        this.toast('CONTACT −0.8s', '#E10600'); buzz([60, 30, 60]);
+        this.toast('CONTACT', '#E10600'); buzz([60, 30, 60]);
       }
     }
     if (Math.abs(pl.d) > HALF - 0.9 && pl.contactT <= 0) {
