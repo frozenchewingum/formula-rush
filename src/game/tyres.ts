@@ -14,10 +14,10 @@ export type CompoundSpec = {
 };
 
 export const COMPOUNDS: CompoundSpec[] = [
-  { id: 'soft', name: 'Soft', short: 'S', color: '#FF3B30', dryGrip: 1.08, wetGrip: 0.72, speed: 1.035, life: 1.7, blurb: 'Fastest, wears out quickly' },
-  { id: 'medium', name: 'Medium', short: 'M', color: '#FFD400', dryGrip: 1.0, wetGrip: 0.7, speed: 1.0, life: 2.6, blurb: 'Balanced pace and life' },
-  { id: 'hard', name: 'Hard', short: 'H', color: '#F2F2F2', dryGrip: 0.94, wetGrip: 0.68, speed: 0.965, life: 3.05, blurb: 'Slowest, lasts the longest' },
-  { id: 'wet', name: 'Wet', short: 'W', color: '#3B6CFF', dryGrip: 0.86, wetGrip: 0.97, speed: 0.95, life: 3.6, blurb: 'Grip in the rain, melts in the dry' },
+  { id: 'soft', name: 'Soft', short: 'S', color: '#FF3B30', dryGrip: 1.08, wetGrip: 0.72, speed: 1.035, life: 1.7, blurb: 'Sharp and eager' },
+  { id: 'medium', name: 'Medium', short: 'M', color: '#FFD400', dryGrip: 1.0, wetGrip: 0.7, speed: 1.0, life: 2.6, blurb: 'A bit of everything' },
+  { id: 'hard', name: 'Hard', short: 'H', color: '#F2F2F2', dryGrip: 0.94, wetGrip: 0.68, speed: 0.965, life: 3.05, blurb: 'In it for the long haul' },
+  { id: 'wet', name: 'Wet', short: 'W', color: '#3B6CFF', dryGrip: 0.86, wetGrip: 0.97, speed: 0.95, life: 3.6, blurb: 'For when the sky opens' },
 ];
 export const compoundIndex = (c: Compound) => Math.max(0, COMPOUNDS.findIndex(s => s.id === c));
 export const spec = (i: number) => COMPOUNDS[i] || COMPOUNDS[1];

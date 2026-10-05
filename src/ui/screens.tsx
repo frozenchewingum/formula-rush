@@ -476,7 +476,7 @@ export function RaceHud({ ui, tilt, onPause, engine }: { ui: UiState; tilt: bool
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 'var(--pad-top) 18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'linear-gradient(rgba(14,14,17,.92),transparent)', pointerEvents: 'none' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ ...display, fontWeight: 900, fontSize: 48, lineHeight: 0.9 }}>P{h.pos}<span style={{ fontSize: 22, color: '#A8A8B0' }}>/{h.field}</span></div>
-          {h.rain && <div style={{ ...mono, padding: '4px 10px', borderRadius: 4, background: '#3B6CFF', fontSize: 12, fontWeight: 700 }}>RAIN · GRIP LOW</div>}
+          {h.rain && <div style={{ ...mono, padding: '4px 10px', borderRadius: 4, background: '#3B6CFF', fontSize: 12, fontWeight: 700 }}>RAIN</div>}
         </div>
         <div style={{ ...mono, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
           {engine && <MiniMap engine={engine} />}

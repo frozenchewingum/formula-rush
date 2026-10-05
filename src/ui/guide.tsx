@@ -41,9 +41,9 @@ function HazardArt() {
   );
   return (
     <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
-      {row('#E10600', 'CONTACT −0.8s', 'cars & walls slow you')}
-      {row('#22C55E', 'TYRES', 'wear down · BOX BOX when low')}
-      {row('#3B6CFF', 'RAIN', 'less grip, shorter view')}
+      {row('#E10600', 'CONTACT', 'cars & walls slow you')}
+      {row('#22C55E', 'TYRES', 'they won’t last forever')}
+      {row('#3B6CFF', 'RAIN', 'everything gets harder')}
     </div>
   );
 }
@@ -70,26 +70,26 @@ function PitArt() {
 const STEPS: Step[] = [
   {
     title: 'Pick your car', img: 'garage', alt: 'The Garage: team colours, Swipe or Tilt, and the RACE button',
-    body: <>Choose a team colour and <Y c="#F2F2F2">Swipe</Y> or <Y c="#F2F2F2">Tilt</Y> controls. Tap <Y c="#E10600">RACE</Y> to take on {GRID_SIZE - 1} AI drivers.</>,
+    body: <>Choose a team colour and <Y c="#F2F2F2">Swipe</Y> or <Y c="#F2F2F2">Tilt</Y> controls. Tap <Y c="#E10600">RACE</Y> to take on {GRID_SIZE - 1} AI drivers. Feeling brave? Turn up the AI in race settings: the higher you go, the less they give away.</>,
   },
   {
     title: 'Nail the launch', img: 'launch', alt: 'Holding the screen through five red lights and letting go on green',
-    body: <>Five red lights count down with a beep each. Rev as much as you like: <Y c="#FFD400">hold</Y> to rev, let go to lift, no penalty. When the lights turn <Y c="#22C55E">green</Y>, let go fast. Within 0.15 s is a <Y c="#A855F7">perfect</Y> start (rolling start + boost), within 0.35 s is good, and slower than 0.7 s bogs down.</>,
+    body: <>Five red lights count down with a beep each. Rev as much as you like: <Y c="#FFD400">hold</Y> to rev, let go to lift. When the lights turn <Y c="#22C55E">green</Y>, let go. The quicker you react, the better your getaway, and a <Y c="#A855F7">perfect</Y> one comes with a little something extra. Hesitate and you’ll bog down.</>,
     keys: 'Hold Space',
   },
   {
     title: 'Change lines, hit apexes', img: 'lines', alt: 'Swiping right twice to reach a yellow apex ring',
-    body: <><Y c="#F2F2F2">Swipe left or right</Y> to move between three racing lines. Drive through the <Y c="#FFD400">yellow rings</Y> on the inside of corners to fill your boost. Inside lines are shorter too.</>,
+    body: <><Y c="#F2F2F2">Swipe left or right</Y> to move between three racing lines. Drive through the <Y c="#FFD400">yellow rings</Y> on the inside of corners to fill your boost.</>,
     keys: '← →',
   },
   {
     title: 'Boost', img: 'boost', alt: 'Swiping up to fire boost, with speed lines on screen',
-    body: <><Y c="#F2F2F2">Swipe up</Y> to fire boost once the yellow bar passes the notch: 25% more speed for a moment. Line up the next apex to refill it.</>,
+    body: <><Y c="#F2F2F2">Swipe up</Y> to fire boost once the yellow bar passes the notch for a burst of speed. Line up the next apex to refill it. Use it wisely.</>,
     keys: '↑ or Space',
   },
   {
     title: 'DRS on the straights', img: 'drs', alt: 'DRS READY appears behind a rival; swiping up opens DRS',
-    body: <>On the teal straights, get within a second of the car ahead and <Y c="#00D2BE">DRS READY</Y> lights up. Swipe up to open it and fly past.</>,
+    body: <>On the teal straights, stay close to the car ahead and <Y c="#00D2BE">DRS READY</Y> lights up. Swipe up to open it and fly past.</>,
     keys: '↑ or Space',
   },
   {
@@ -99,11 +99,11 @@ const STEPS: Step[] = [
   },
   {
     title: 'Keep it clean', art: <HazardArt />,
-    body: <>Hitting cars or the wall scrubs speed. Tyres wear as you race, and when it <Y c="#3B6CFF">rains</Y> you get less grip and see less of the road.</>,
+    body: <>Hitting cars or the wall costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
   },
   {
     title: 'Tyres & Pit Stop Rush', art: <PitArt />,
-    body: <>Pick your <Y c="#FF3B30">Soft</Y>, <Y c="#FFD400">Medium</Y>, <Y c="#F2F2F2">Hard</Y> or <Y c="#3B6CFF">Wet</Y> tyres before the race. Softs are fastest but wear out quickly. When the team calls <Y c="#FFD400">BOX BOX</Y>, get on the right-hand line before the finish and <Y c="#F2F2F2">swipe right</Y> into the pit lane. Pick your next tyres any time from the NEXT strip on the right. In the box, tap each wheel twice in any order: gun off, then gun on once it glows yellow. Under 2 seconds earns boost.</>,
+    body: <>Pick your <Y c="#FF3B30">Soft</Y>, <Y c="#FFD400">Medium</Y>, <Y c="#F2F2F2">Hard</Y> or <Y c="#3B6CFF">Wet</Y> tyres before the race. Each one feels different; finding out which suits the race is up to you. When the team calls <Y c="#FFD400">BOX BOX</Y>, get on the right-hand line before the finish and <Y c="#F2F2F2">swipe right</Y> into the pit lane. Pick your next tyres any time from the NEXT strip on the right. In the box, tap each wheel twice in any order: gun off, then gun on once it glows yellow. A quick stop has its rewards.</>,
     keys: '→ to pit · 1–4 next tyres · Q E Z C wheels',
   },
   {

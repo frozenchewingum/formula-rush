@@ -1,6 +1,6 @@
 // Tyre choice before the race, the lobby picker and the Pit Stop Rush overlay (v1.5).
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { COMPOUNDS, PIT_FAST, PIT_WRONG, PIT_SWAP, compoundIndex, type Compound } from '../game/tyres';
+import { COMPOUNDS, PIT_SWAP, compoundIndex, type Compound } from '../game/tyres';
 import { PitScene } from '../garage/pitScene';
 import type { Paint } from '../garage/carModel';
 import { weatherMeta, type Weather } from '../game/constants';
@@ -20,25 +20,17 @@ export function TyreDot({ i, size = 24 }: { i: number; size?: number }) {
 /** Tyre life as a feel, not a lap count: players find out how far each compound goes by racing it. */
 const lifeLabel = (life: number) => life < 2 ? 'SHORT ●○○' : life < 2.8 ? 'MID ●●○' : 'LONG ●●●';
 
-/** What to start on, from the race length and the forecast. */
-export function startRecommendation(laps: number, weather: Weather): Compound {
-  if (weather === 'Rain') return 'wet';
-  if (laps <= 1) return 'soft';
-  return laps <= 3 ? 'soft' : 'medium';
-}
-
 function strategyHint(laps: number, weather: Weather) {
-  if (weather === 'Rain') return 'Wet race. Wets keep you on the road; slicks slide everywhere.';
-  if (laps <= 1) return 'Sprint: no stop needed. Softs are fastest over one lap.';
-  const base = laps <= 3 ? 'One stop is fastest: Soft, then Medium.' : laps <= 5 ? 'Plan one or two stops. Hards last longest.' : 'Plan two stops. Hards last longest.';
-  if (weather === 'Rain on final lap') return base + ' Rain on the final lap: box for wets.';
-  if (weather === 'Random') return base + ' If it rains, box for wets.';
+  if (weather === 'Rain') return "It's wet out there. Choose wisely.";
+  if (laps <= 1) return 'Short and sharp. Every moment counts.';
+  const base = laps <= 3 ? 'Will your tyres go the distance? Maybe. Maybe not.' : 'A long race. Think about when you will stop.';
+  if (weather === 'Rain on final lap') return base + ' Keep an eye on the sky.';
+  if (weather === 'Random') return base + ' The weather may change its mind.';
   return base;
 }
 
 /** Bottom sheet before lights out: pick the starting compound. */
 export function TyreSheet(p: { value: Compound; set: (c: Compound) => void; laps: number; weather: Weather; go: () => void; close: () => void }) {
-  const rec = startRecommendation(p.laps, p.weather);
   const [, wname, , wdot] = weatherMeta(p.weather);
   const label: CSSProperties = { ...mono, fontSize: 11, letterSpacing: '.2em', color: '#8A8A92' };
   useEffect(() => {
@@ -69,7 +61,6 @@ export function TyreSheet(p: { value: Compound; set: (c: Compound) => void; laps
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                   <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
                     {c.name}
-                    {rec === c.id && <span style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', padding: '2px 5px', borderRadius: 3, background: '#22C55E', color: '#0E0E11' }}>PICK</span>}
                   </span>
                   <span style={{ fontSize: 12, color: '#8A8A92' }}>{c.blurb}</span>
                 </span>
@@ -184,7 +175,7 @@ export function PitStop({ pit, now, wear, oldTc, carColor, paint, tap }: { pit: 
   const wrong = t - pit.wrongAt < 0.4;
   const chosen = COMPOUNDS[pit.chosen] || COMPOUNDS[1];
   const left = pit.ws.filter(x => x !== 2).length;
-  const head = wrong ? 'TOO EARLY +' + PIT_WRONG.toFixed(1) + 's' : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : left === 4 && pit.ws.every(x => x === 0) ? 'TAP EVERY WHEEL' : left + (left === 1 ? ' WHEEL' : ' WHEELS') + ' TO GO';
+  const head = wrong ? 'TOO EARLY' : pit.phase === 'done' ? (pit.pen > 0 ? 'HOLD…' : 'GO GO GO') : left === 4 && pit.ws.every(x => x === 0) ? 'TAP EVERY WHEEL' : left + (left === 1 ? ' WHEEL' : ' WHEELS') + ' TO GO';
   const state = (i: number) => {
     const s = pit.ws[i], seated = s === 1 && t >= pit.offAt[i] + PIT_SWAP;
     return s === 2 ? { label: '✓', fg: '#0E0E11', bg: '#22C55E', bd: '#22C55E' }
@@ -225,7 +216,7 @@ export function PitStop({ pit, now, wear, oldTc, carColor, paint, tap }: { pit: 
       <div style={{ ...display, fontWeight: 800, fontSize: 28, lineHeight: 1, textAlign: 'center', color: wrong ? '#E10600' : '#F2F2F2', minHeight: 28 }}>{head}</div>
       <div style={{ ...mono, fontSize: 12, color: '#8A8A92', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#C8C8CE' }}><TyreDot i={pit.chosen} size={20} /> {chosen.name.toUpperCase()} GOING ON</span>
-        <span>Tap = gun off · tap again on yellow = gun on · under {PIT_FAST.toFixed(1)}s = +BOOST</span>
+        <span>Tap = gun off · tap again on yellow = gun on · be quick</span>
       </div>
     </div>
   );
