@@ -7,8 +7,8 @@ import { supabaseConfigured } from './net/supabase';
 import { saveResult, fetchPersonalBest } from './net/results';
 import { Guide } from './ui/guide';
 import { Garage, RaceSettingsSheet, Join, Lobby, Lights, RaceHud, Results, ToastView, PauseMenu, CarSheet, cleanName } from './ui/screens';
-import { TyreSheet, PitStop, NextTyreStrip } from './ui/tyres';
-import { isCompound, type Compound, type Dir } from './game/tyres';
+import { TyreSheet, PitStop, NextTyreStrip, prewarmPit3d } from './ui/tyres';
+import { isCompound, type Compound } from './game/tyres';
 
 // Storage can throw (blocked cookies / some private modes); the game must still run.
 const ls = {
@@ -266,10 +266,7 @@ export default function App() {
       if (!p || braked || screenRef.current !== 'race') return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y, tilt = engine.controls === 'tilt';
       // Pit Stop Rush: every swipe is a wheel gun.
-      if (engine.pitActive) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) > 26) engine.pitSwipe(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
-        return;
-      }
+      if (engine.pitActive) return; // the pit overlay handles its own taps
       if (!tilt && Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy)) engine.lane(Math.sign(dx));
       else if (dy < -34 && Math.abs(dy) > Math.abs(dx)) engine.action();
       else if (tilt && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
@@ -287,10 +284,10 @@ export default function App() {
       if ((k === 'Escape' || k === 'p' || k === 'P') && !engine.mp) { e.preventDefault(); engine.setPaused(!engine.paused); return; }
       if (engine.paused) return;
       if (engine.pitActive) {
-        const dir: Dir | null = k === 'ArrowLeft' || k === 'a' ? 'left' : k === 'ArrowRight' || k === 'd' ? 'right' : k === 'ArrowUp' || k === 'w' ? 'up' : k === 'ArrowDown' || k === 's' ? 'down' : null;
-        if (dir || /^[1-4]$/.test(k) || k === 'Enter' || k === ' ') e.preventDefault();
-        if (e.repeat) return;
-        if (dir) engine.pitSwipe(dir);
+        // Wheel guns from a keyboard: Q E / Z C (or 7 9 / 1 3) = front-left, front-right / rear-left, rear-right.
+        const w = ['q', 'e', 'z', 'c'].indexOf(k.toLowerCase()), n = ['7', '9', '1', '3'].indexOf(k);
+        if (w >= 0 || n >= 0) { e.preventDefault(); if (!e.repeat) engine.pitTap(w >= 0 ? w : n); }
+        else if (k.startsWith('Arrow') || k === ' ') e.preventDefault();
         return;
       }
       // 1–4: next tyres (Soft / Medium / Hard / Wet).
@@ -328,6 +325,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine]);
 
+  // Pit Stop Rush: stable props for the 3D view, and build it while the car drives down the pit lane.
+  const pitClock = useCallback(() => engine.g.t, [engine]);
+  const pitTap = useCallback((w: number) => engine.pitTap(w), [engine]);
+  const myPaint = useMemo(() => ({ color: TEAMS[team].color, dark: TEAMS[team].dark, accent: ACCENTS[accent] || ACCENTS[0], livery }), [team, accent, livery]);
+  useEffect(() => { if (ui.hud.limiter) prewarmPit3d(); }, [ui.hud.limiter]);
   const showSettingsRef = useRef(false);
   showSettingsRef.current = showSettings;
   const showGuideRef = useRef(false);
@@ -388,7 +390,7 @@ export default function App() {
             exit={() => { engine.setPaused(false); engine.resetRace(); setScreen('garage'); }} />
         )}
         {screen === 'race' && !ui.pit && !ui.paused && <NextTyreStrip current={ui.hud.tc} next={ui.hud.nextTc} set={i => engine.setNextTyre(i)} rain={ui.hud.rain} />}
-        {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={() => engine.g.t} wear={ui.hud.tyre / 100} carColor={engine.g.player.color} />}
+        {screen === 'race' && ui.pit && <PitStop pit={ui.pit} now={pitClock} wear={ui.hud.tyre / 100} oldTc={ui.hud.tc} carColor={engine.g.player.color} paint={myPaint} tap={pitTap} />}
         {screen === 'lights' && <Lights ui={ui} />}
         {screen === 'garage' && (
           <Garage team={team} setTeam={setTeam} livery={livery} setLivery={setLivery} accent={accent} setAccent={setAccent} controls={controls} setControls={pickControls} settings={settings}
