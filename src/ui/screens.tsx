@@ -514,7 +514,6 @@ export function RaceHud({ ui, tilt, onPause, engine }: { ui: UiState; tilt: bool
             {h.limiter && <div style={{ ...chip, background: '#FFD400', color: '#0E0E11' }}>PIT LIMITER</div>}
             {h.drsReady && <div style={{ ...chip, border: '1.5px solid #00D2BE', color: '#00D2BE' }}>DRS READY · ↑</div>}
             {h.drsOn && <div style={{ ...chip, background: '#00D2BE', color: '#0E0E11' }}>DRS OPEN</div>}
-            {h.braking && <div style={{ ...chip, background: '#E10600', color: '#F2F2F2' }}>BRAKE</div>}
             {h.slip && <div style={{ ...chip, background: '#1A1A1E', color: '#C8C8CE' }}>SLIPSTREAM</div>}
           </div>
           <div style={{ ...mono, fontSize: 28, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>{h.kmh}<span style={{ fontSize: 12, color: '#8A8A92' }}> KM/H</span></div>
@@ -524,7 +523,7 @@ export function RaceHud({ ui, tilt, onPause, engine }: { ui: UiState; tilt: bool
         <div style={{ textAlign: 'center', fontSize: 14, color: h.pitWindow ? '#FFD400' : '#8A8A92' }}>
           {h.pitWindow
             ? (tilt ? 'steer hard right on the right-hand line to pit' : 'from the right-hand line, swipe → to pit')
-            : tilt ? 'tilt or drag to steer · tap right edge to boost · hold to brake' : '← → change line · ↑ DRS / boost · hold to brake'}
+            : tilt ? 'tilt or drag to steer · tap right edge to boost' : '← → change line · ↑ DRS / boost'}
         </div>
       </div>
     </>

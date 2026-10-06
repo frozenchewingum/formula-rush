@@ -93,8 +93,8 @@ const STEPS: Step[] = [
     keys: '↑ or Space',
   },
   {
-    title: 'Brake', art: <HazardArt />,
-    body: <><Y c="#E10600">Press and hold</Y> the screen (without swiping) to brake. Boards count down <Y c="#F2F2F2">3 · 2 · 1</Y> before the big corners. On easy the car slows for corners by itself; turn the AI up and that’s on you. Too hot and you’ll run wide, and hard braking on tired tyres or in the wet can lock the wheels. Use the brake to tuck in behind a car too: sit in its tow, then swipe out at the right moment and you might just fly past.</>,
+    title: 'Hold the corners', art: <HazardArt />,
+    body: <>No brakes needed: the car lifts for corners by itself. But every corner <Y c="#FF8A00">pushes you outward</Y>, harder the faster you take it and the higher the AI. <Y c="#F2F2F2">Swipe toward the inside</Y> to hold your line, or you’ll slide across the lines and onto the <Y c="#22C55E">grass</Y>. Boost or a tow into a bend? Expect a bigger push.</>,
     keys: 'Hold ↓ or S',
   },
   {

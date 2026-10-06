@@ -21,7 +21,7 @@ export type Car = {
   isPlayer: boolean; remote: boolean; ai: boolean;
   p: number; d: number; dTarget: number; v: number; k: number; i: number;
   base: number; startDelay: number; think: number; yawOff: number; contactT: number;
-  finished: boolean; finishTime: number; boostOn: boolean; drsOn: boolean; brakeOn: boolean; dnf: boolean;
+  finished: boolean; finishTime: number; boostOn: boolean; drsOn: boolean; dnf: boolean;
   snaps: Snap[];
   /** Tyres: compound index into COMPOUNDS, wear 1 (new) → 0 (gone). */
   tc: number; wear: number;
@@ -37,7 +37,7 @@ type Snap = { t: number; p: number; d: number; v: number; y: number };
 
 export type Hud = {
   pos: number; lap: number; laps: number; time: string; best: string; boost: number; tyre: number;
-  kmh: number; drsReady: boolean; drsOn: boolean; boostOn: boolean; braking: boolean; slip: boolean; rain: boolean; field: number;
+  kmh: number; drsReady: boolean; drsOn: boolean; boostOn: boolean; slip: boolean; rain: boolean; field: number;
   /** Tyre compound index, pit window open, pit lane limiter on, team radio call ('' when none). */
   tc: number; pitWindow: boolean; limiter: boolean; boxCall: string;
   /** Tyres the crew will fit at the next stop (same as tc unless changed). */
@@ -113,8 +113,8 @@ type Game = {
   slingT: number; towCar: Car | null;
   /** Tow (v1.23): eased strength 0–1, seconds spent in a real tow, and the line you were on while in it. */
   tow: number; towT: number; towD: number;
-  /** Braking (v1.20): toast cooldown for running wide, seconds the brake has been held, wheels locked, pit entry judged, pit speeding penalty. */
-  wideCd: number; brakeHeld: number; locked: boolean; pitJudged: boolean; pitPen: number;
+  /** Toast cooldown for going off track. */
+  wideCd: number;
 };
 
 /** Launch grades: seconds from green to letting go, the auto-launch time and the bog-down penalty. */
@@ -122,7 +122,7 @@ const LAUNCH_PERFECT = 0.15, LAUNCH_GOOD = 0.35, LAUNCH_OK = 0.7, LAUNCH_AUTO = 
 
 const emptyHud = (laps: number, tc = 1): Hud => ({
   pos: GRID_SLOT + 1, lap: 1, laps, time: '0:00.000', best: '—', boost: 20, tyre: 100, kmh: 0, drsReady: false, drsOn: false, boostOn: false,
-  braking: false, slip: false, rain: false, field: GRID_SIZE, tc, nextTc: tc, pitWindow: false, limiter: false, boxCall: '',
+  slip: false, rain: false, field: GRID_SIZE, tc, nextTc: tc, pitWindow: false, limiter: false, boxCall: '',
 });
 
 export class Engine {
@@ -145,8 +145,6 @@ export class Engine {
   onFinish: (f: FinishInfo) => void = () => {};
 
   keySteer = 0; dragSteer = 0; gyroSteer = 0;
-  /** Hold-to-brake: keyboard (↓ / S) and touch (press and hold without swiping). */
-  brakeKey = false; brakeTouch = false;
   private listeners = new Set<() => void>();
   private timers: number[] = [];
   private holdingFlag = false;
@@ -214,8 +212,8 @@ export class Engine {
         ? { team: t, userId: 'me', base: VMAX, livery: this.livery, accent: this.accent }
         : { team: t, userId: null, base: aiBase(i, ai) });
     }
-    // Per-track AI pace (v1.21); the extra braking factor only where you brake for corners yourself (Hard / Expert).
-    const td = trackDef(trackId), trackAi = (td.aiPace ?? 1) * (ai.assist === 0 || ai.assist > 1.1 ? td.brakePace ?? 1 : 1);
+    // Per-track AI pace (v1.21).
+    const trackAi = trackDef(trackId).aiPace ?? 1;
     const myId = mp && this.net ? this.net.myId : 'me';
     const host = !mp || !this.net || this.net.isHost();
     const rainPlan = mp ? mp.rainPlan : makeRainPlan(this.settings.weather, laps, T.L);
@@ -232,7 +230,7 @@ export class Engine {
         p: -8 - i * 8, d, dTarget: d, v: 0, k: 0, i: 0,
         base: me ? VMAX : human ? e.base : e.base * trackAi, startDelay: me ? Infinity : ai.launch[0] + Math.random() * (ai.launch[1] - ai.launch[0]),
         think: Math.random() * 2, yawOff: 0, contactT: 0, finished: false, finishTime: 0,
-        boostOn: false, drsOn: false, brakeOn: false, dnf: false, snaps: [],
+        boostOn: false, drsOn: false, dnf: false, snaps: [],
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
         pit: 0, lineP: 0, boxP: 0, outP: 0, pitHold: 0, pitT0: 0, pitChecked: -1,
         stops: 0, bestPit: 0, stints: [], boxCalled: false, failCalled: false,
@@ -250,10 +248,10 @@ export class Engine {
       cars, player, t: 0, laps, running: false, boost: 20, boostT: 0, drsOn: false, drsReady: false, slip: false,
       lapStart: 0, best: 0, apexHits: 0, apexTotal: 0, contacts: 0,
       skill: ai.skill, ai, camH: trackAt(T, player.p).h, fov: 0, shake: 0,
-      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0, slingT: 0, towCar: null, tow: 0, towT: 0, towD: 0, wideCd: 0, brakeHeld: 0, locked: false, pitJudged: false, pitPen: 0,
+      rainWas: false, rainPlan, startSlot: cars.indexOf(player), finishedAt: 0, slingT: 0, towCar: null, tow: 0, towT: 0, towD: 0, wideCd: 0,
     };
     T.apexes.forEach(a => { a.hit = -9; a.miss = -9; });
-    this.keySteer = 0; this.dragSteer = 0; this.brakeKey = false; this.brakeTouch = false;
+    this.keySteer = 0; this.dragSteer = 0;
     this.set({ hud: { ...emptyHud(laps, player.tc), pos: cars.indexOf(player) + 1 }, pit: null });
   }
 
@@ -273,7 +271,7 @@ export class Engine {
     if (this.mp || this.screen !== 'race' || this.g.player.finished) p = false;
     if (p === this.paused) return;
     this.paused = p;
-    if (p) { this.brakeKey = false; this.brakeTouch = false; this.keySteer = 0; this.dragSteer = 0; }
+    if (p) { this.keySteer = 0; this.dragSteer = 0; }
     this.set({ paused: p });
   }
 
@@ -472,8 +470,8 @@ export class Engine {
     c.boxP = line + PIT.BOX + slot * PIT.SPACING; c.outP = line + PIT.EXIT;
     c.dTarget = PIT.D;
     if (c.isPlayer) {
-      g.boostT = 0; g.drsOn = false; g.drsReady = false; c.boxCalled = true; g.pitJudged = false;
-      this.toast(g.ai.pitPen > 0 ? 'PIT LANE · BRAKE' : 'PIT LANE', '#FFD400'); buzz(20);
+      g.boostT = 0; g.drsOn = false; g.drsReady = false; c.boxCalled = true;
+      this.toast('PIT LANE', '#FFD400'); buzz(20);
     }
   }
   /** AI strategy, decided once per lap as the car reaches the pit window. */
@@ -496,21 +494,15 @@ export class Engine {
     c.stints.push(compoundIndex(recommend(rem, rain)));
   }
   /** Pit lane driving for every locally simulated car; returns the speed cap. */
-  /** Pit limiter engaged: whole pit lane, except before the line when you brake for it yourself (Hard / Expert). */
+  /** Pit limiter engaged: the whole pit lane (automatic on every level since v1.27). */
   private limiterOn(c: Car) {
-    return (c.pit === 1 && (!this.g.ai.pitPen || c.p >= c.lineP + PIT.ENTRY)) || c.pit === 3;
+    return c.pit === 1 || c.pit === 3;
   }
   private pitSpeed(c: Car, target: number, dt: number) {
     const g = this.g;
     if (c.pit === 1) {
       const entry = c.lineP + PIT.ENTRY;
-      // Hard / Expert: you brake for the pit lane yourself; the limiter only takes over at the line.
-      const manual = c.isPlayer && g.ai.pitPen > 0;
-      if (manual && !g.pitJudged && c.p >= entry) {
-        g.pitJudged = true;
-        if (c.v > PIT.LIMIT + 4) { g.pitPen = g.ai.pitPen; this.toast('PIT LANE SPEEDING', '#E10600'); buzz([80, 40, 80]); }
-      }
-      if (!manual || c.p >= entry) target = Math.min(target, Math.sqrt(PIT.LIMIT * PIT.LIMIT + 2 * 60 * Math.max(0, entry - c.p)));
+      target = Math.min(target, Math.sqrt(PIT.LIMIT * PIT.LIMIT + 2 * 60 * Math.max(0, entry - c.p)));
       target = Math.min(target, Math.sqrt(2 * 55 * Math.max(0, c.boxP - c.p)) + 0.5);
       if (c.boxP - c.p < 0.6) {
         c.p = c.boxP; c.v = 0; c.pit = 2; c.pitT0 = g.t;
@@ -551,8 +543,7 @@ export class Engine {
   private openPitUi() {
     const g = this.g, pl = g.player;
     const chosen = this.nextTyre ?? pl.tc;
-    const pen = g.pitPen; g.pitPen = 0;
-    this.set({ pit: { phase: 'wheels', chosen, ws: [0, 0, 0, 0], offAt: [-9, -9, -9, -9], onAt: [-9, -9, -9, -9], pen, wrongAt: -9, wrongWheel: -1, t0: g.t, releaseAt: 0 } });
+    this.set({ pit: { phase: 'wheels', chosen, ws: [0, 0, 0, 0], offAt: [-9, -9, -9, -9], onAt: [-9, -9, -9, -9], pen: 0, wrongAt: -9, wrongWheel: -1, t0: g.t, releaseAt: 0 } });
     buzz([30, 30, 30]);
   }
   /**
@@ -633,26 +624,9 @@ export class Engine {
       }
       if (c.pit) vmax = Math.min(vmax, VMAX);
       const corner = Math.sqrt(G / Math.max(T.ka[c.i], 1e-4));
-      // Braking assist (v1.20): Easy brakes for every corner for you; Normal/Hard only down to a margin over
-      // the limit (boost no longer carries into corners); Expert not at all. Too fast → you slide wide below.
-      const manual = c.isPlayer && !c.pit && g.ai.assist !== 1;
-      let target = !started ? 0 : manual ? Math.min(vmax * mult, g.ai.assist ? corner * g.ai.assist : Infinity) : Math.min(vmax, corner) * mult;
+      // No braking (v1.27): every car lifts for corners by itself; boost and a tow still carry extra speed in.
+      let target = !started ? 0 : Math.min(vmax, corner) * mult;
       let decel = 75;
-      if (c.isPlayer) {
-        const pitBrake = c.pit === 1 && g.ai.pitPen > 0 && c.p < c.lineP + PIT.ENTRY;
-        c.brakeOn = started && !c.finished && (!c.pit || pitBrake) && (this.brakeKey || this.brakeTouch);
-        if (c.brakeOn) {
-          target = 0; // eases off at the normal 75/s braking rate
-          g.brakeHeld += dt;
-          // Lock-up: hold hard braking on worn tyres, or on slicks in the rain, and the wheels lock.
-          const risky = g.ai.lock > 0 && c.v > 35 && (c.wear < 0.45 || (rain && spec(c.tc).id !== 'wet'));
-          if (risky && !g.locked && g.brakeHeld > g.ai.lock) {
-            g.locked = true; c.wear = Math.max(0, c.wear - 0.05); g.shake = 0.25;
-            this.toast('LOCK-UP', '#FF8A00'); buzz([30, 20, 30]);
-          }
-          if (g.locked) decel = 38;
-        } else { g.brakeHeld = 0; g.locked = false; }
-      }
       if (c.finished) target = Math.min(target, 38);
       if (!c.isPlayer && !c.finished && started) this.aiPitCheck(c, rain);
       if (c.pit) target = this.pitSpeed(c, target, dt);
@@ -744,25 +718,13 @@ export class Engine {
       const lr = c.isPlayer ? 21 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;
       c.d += clamp(c.dTarget - c.d, -lr * dt, lr * dt);
       if (c.isPlayer && rain && !c.pit) c.d += Math.sin(g.t * 1.7) * (wets ? 0.35 : 0.9) * dt;
-      // Too fast for the corner (Normal and up): slide wide, scrub speed and tyre; far too fast runs off onto the grass.
-      if (c.isPlayer && !c.pit && g.ai.assist !== 1 && started && !c.finished) {
-        // Same limit the assist uses (worst curvature just ahead): perfect braking matches it, mistakes cost.
-        const kk = T.k[c.i], lim = Math.sqrt(G / Math.max(T.ka[c.i], 1e-4)), vs = lim * 1.03;
-        if (Math.abs(kk) > 0.006 && c.v > vs) {
-          const e = c.v / vs - 1, out = -Math.sign(kk);
-          c.v -= c.v * Math.min(0.6, e * 2.2) * dt;
-          // v1.26: the car only slides sideways when you're faster than the assist would take you (your own
-          // throttle, boost or a tow), so assisted corners hold their line; the speed scrub above still applies.
-          const ew = c.v / (lim * Math.max(1.03, g.ai.assist + 0.01)) - 1;
-          if (ew > 0) {
-            c.d += out * Math.min(30, ew * 120) * dt;
-            c.d = clamp(c.d, -this.grassAt(c.p, -1), this.grassAt(c.p, 1));
-            // Wherever the slide leaves you is where you stay: no pull back to your old line.
-            if (this.controls !== 'tilt') c.dTarget = c.d;
-          }
-          c.wear = Math.max(0, c.wear - e * 0.04 * dt);
-          if (ew > 0.02 && g.wideCd <= 0) { g.wideCd = 2; this.toast('RUNNING WIDE', '#FF8A00'); buzz(25); }
-        }
+      // Corners (v1.27): they push you outward, harder the faster you go for the bend and on harder levels.
+      // Swipe (or steer) inward to hold your line; leave it and you cross the lines and end up on the grass.
+      // The push moves your line with you, so a swipe in fights it rather than being undone by it.
+      if (c.isPlayer && !c.pit && started && !c.finished && Math.abs(T.k[c.i]) > 0.004) {
+        const load = c.v * c.v * Math.abs(T.k[c.i]) / 66, push = -Math.sign(T.k[c.i]) * g.ai.drift * load * load * dt;
+        const lo = -this.grassAt(c.p, -1), hi = this.grassAt(c.p, 1);
+        c.d = clamp(c.d + push, lo, hi); c.dTarget = clamp(c.dTarget + push, lo, hi);
       }
       if (c.isPlayer && g.wideCd > 0) g.wideCd -= dt;
       const prevP = c.p;
@@ -1031,7 +993,7 @@ export class Engine {
     // Throttle from what the car is doing: accelerating = flat out, braking = off, holding speed = part throttle.
     const acc = dt > 0 ? (pl.v - this.sndV) / dt : 0;
     this.sndV = pl.v;
-    const want = pl.brakeOn || pl.contactT > 0.6 ? 0 : acc > 2 ? 1 : acc < -5 ? 0 : 0.55;
+    const want = pl.contactT > 0.6 ? 0 : acc > 2 ? 1 : acc < -5 ? 0 : 0.55;
     this.sndThr += (want - this.sndThr) * Math.min(1, dt * 10);
     let rival: EngineInput['rival'] = null, best = 70;
     for (const o of g.cars) {
@@ -1067,7 +1029,7 @@ export class Engine {
       hud: {
         pos, lap, laps: g.laps, time: fmt(pl.p > 0 && !pl.finished ? g.t - g.lapStart : 0), best: g.best ? fmt(g.best) : '—',
         boost: Math.round(g.boost), tyre: Math.round(pl.wear * 100), kmh: Math.round(pl.v * 4.1),
-        drsReady: g.drsReady, drsOn: g.drsOn, boostOn: g.boostT > 0, braking: pl.brakeOn, slip: g.slip && !g.drsOn, rain, field: g.cars.length,
+        drsReady: g.drsReady, drsOn: g.drsOn, boostOn: g.boostT > 0, slip: g.slip && !g.drsOn, rain, field: g.cars.length,
         tc: pl.tc, nextTc: this.nextTyre ?? pl.tc, pitWindow: this.canPit(pl), limiter: this.limiterOn(pl), boxCall: this.boxCall(rain),
       },
     });

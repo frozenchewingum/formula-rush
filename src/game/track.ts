@@ -7,8 +7,6 @@ export type Track = {
   x: number[]; y: number[]; hd: number[]; k: number[]; ka: number[];
   nx: number[]; ny: number[]; kerb: boolean[]; drs: boolean[];
   drsStarts: number[]; apexes: Apex[];
-  /** Brake boards (v1.20): index of the last-moment braking point (board 1) before each corner that needs it. */
-  brakes: number[];
   /** Lanes at each point (1–3) and the road's half width there, tapering into and out of narrow sections. */
   lanes: number[]; hw: number[];
 };
@@ -23,8 +21,8 @@ export const lanesFor = (hw: number) => (hw >= 9.7 ? 4 : hw >= 7.4 ? 3 : hw >= 5
 export type TrackId = 'circuit-1' | 'monsoon' | 'harbour';
 /** Lane sections (v1.21, 2–4 lanes v1.22): [from, to, lanes] in track units from the line; everywhere else has 3 lanes. */
 export type TrackDef = { id: TrackId; name: string; short: string; blurb: string; pts: number[][]; scale: number; narrow: [number, number, number][];
-  /** AI pace on this track (v1.21), and an extra factor on levels where you brake yourself (many heavy braking zones). */
-  aiPace?: number; brakePace?: number };
+  /** AI pace on this track (v1.21). */
+  aiPace?: number };
 
 /**
  * Layouts as Catmull-Rom control points (y down, driven in point order, start/finish at the first point).
@@ -35,10 +33,10 @@ export const TRACKS: TrackDef[] = [
     narrow: [[400, 620, 2], [740, 1060, 4], [1110, 1290, 2], [1330, 1480, 4], [1525, 1660, 2]],
     pts: [[0,0],[0,-300],[40,-420],[160,-460],[260,-400],[280,-280],[380,-220],[520,-260],[600,-380],[720,-400],[800,-300],[780,-120],[680,0],[700,140],[620,260],[440,280],[300,200],[180,240],[60,200]] },
   { id: 'monsoon', name: 'Monsoon Park', short: 'MONSOON', blurb: 'Built for speed. Mind the hairpins', scale: 0.8,
-    narrow: [[450, 760, 4], [870, 1200, 2], [1290, 1600, 2], [1700, 1810, 2], [1850, 2090, 4], [2120, 2215, 2]], aiPace: 0.98, brakePace: 0.97,
+    narrow: [[450, 760, 4], [870, 1200, 2], [1290, 1600, 2], [1700, 1810, 2], [1850, 2090, 4], [2120, 2215, 2]], aiPace: 0.98,
     pts: [[0,0],[0,-170],[0,-330],[5,-390],[35,-420],[75,-410],[85,-370],[95,-330],[125,-305],[175,-310],[280,-335],[370,-360],[440,-320],[470,-250],[460,-180],[430,-120],[460,-50],[440,20],[445,120],[415,190],[350,210],[290,215],[250,235],[222,215],[230,175],[262,120],[250,60],[270,-20],[255,-100],[240,-150],[200,-185],[140,-185],[103,-150],[95,-90],[95,50],[95,170],[90,232],[62,262],[28,262],[4,230],[0,160]] },
   { id: 'harbour', name: 'Harbour Streets', short: 'HARBOUR', blurb: 'Tight, twisty, no room for error', scale: 1,
-    narrow: [[150, 1330, 2], [1333, 1538, 4], [1540, 2165, 2]], aiPace: 0.985, brakePace: 0.97,
+    narrow: [[150, 1330, 2], [1333, 1538, 4], [1540, 2165, 2]], aiPace: 0.985,
     pts: [[0,0],[0,-110],[10,-165],[55,-185],[150,-200],[240,-240],[290,-290],[300,-350],[330,-400],[390,-410],[440,-390],[452,-335],[445,-285],[460,-248],[490,-250],[498,-285],[520,-315],[560,-300],[600,-240],[610,-130],[580,-30],[560,40],[577,82],[550,140],[480,160],[420,150],[395,188],[345,168],[310,196],[200,195],[165,238],[120,252],[78,236],[30,214],[5,172],[0,110]] },
 ];
 export const DEFAULT_TRACK: TrackId = 'circuit-1';
@@ -130,20 +128,7 @@ export function buildTrack(id: string = DEFAULT_TRACK): Track {
       drsStarts.push(s0);
     }
   });
-  // Brake boards: speed profile at your top speed (corner limit from local curvature, braking at 75/s);
-  // board 1 marks where it starts dropping from flat out into a corner that's well below top speed.
-  const top = 78, vc = k.map(kk => Math.min(top, Math.sqrt(66 / Math.max(Math.abs(kk), 1e-4))));
-  const prof = [...vc];
-  for (let r = 0; r < 2; r++) for (let i = N - 1; i >= 0; i--) prof[i] = Math.min(prof[i], Math.sqrt(prof[(i + 1) % N] ** 2 + 2 * 75 * step));
-  const brakes: number[] = [];
-  for (let i = 0; i < N; i++) {
-    if (!(prof[i] < top - 1 && prof[(i - 1 + N) % N] >= top - 1)) continue;
-    let low = top;
-    for (let j = 0; j < 40; j++) low = Math.min(low, vc[(i + j) % N]);
-    if (low < 60 && (!brakes.length || i - brakes[brakes.length - 1] > 30)) brakes.push(i);
-  }
-  if (brakes.length > 1 && brakes[0] + N - brakes[brakes.length - 1] <= 30) brakes.shift();
-  return { id: def.id, N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes, brakes, lanes, hw };
+  return { id: def.id, N, step, L: N * step, x, y, hd, k, ka, nx, ny, kerb, drs, drsStarts, apexes, lanes, hw };
 }
 
 export function trackAt(T: Track, p: number) {
