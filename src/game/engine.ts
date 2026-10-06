@@ -660,9 +660,10 @@ export class Engine {
       // Narrowing ahead (v1.25): your line only moves when the road actually closes in on it, onto the nearest
       // line that's left (never because of traffic, so sitting in a tow doesn't push you aside). Off the road,
       // you stay where you are until you steer back.
+      // v1.26: only when you fit here but won't a little further on, so it never fights a slide in a corner.
       if (c.isPlayer && !c.pit && started && !c.finished && this.controls !== 'tilt') {
         const room = Math.min(this.halfAt(c.p), this.halfAt(c.p + 20)) - 1.6;
-        if (Math.abs(c.dTarget) > room && Math.abs(c.dTarget) <= this.halfAt(c.p) - 0.9) {
+        if (Math.abs(c.dTarget) > room && Math.abs(c.dTarget) <= this.halfAt(c.p) - 1.6) {
           const cs = this.centres(c.p, 20); c.dTarget = cs[this.nearestIdx(cs, c.d)];
         }
       }
@@ -746,16 +747,21 @@ export class Engine {
       // Too fast for the corner (Normal and up): slide wide, scrub speed and tyre; far too fast runs off onto the grass.
       if (c.isPlayer && !c.pit && g.ai.assist !== 1 && started && !c.finished) {
         // Same limit the assist uses (worst curvature just ahead): perfect braking matches it, mistakes cost.
-        const kk = T.k[c.i], vs = Math.sqrt(G / Math.max(T.ka[c.i], 1e-4)) * 1.03;
+        const kk = T.k[c.i], lim = Math.sqrt(G / Math.max(T.ka[c.i], 1e-4)), vs = lim * 1.03;
         if (Math.abs(kk) > 0.006 && c.v > vs) {
           const e = c.v / vs - 1, out = -Math.sign(kk);
           c.v -= c.v * Math.min(0.6, e * 2.2) * dt;
-          c.d += out * Math.min(30, e * 120) * dt;
-          c.d = clamp(c.d, -this.grassAt(c.p, -1), this.grassAt(c.p, 1));
-          // Wherever the slide leaves you is where you stay: no pull back to your old line.
-          if (this.controls !== 'tilt') c.dTarget = c.d;
+          // v1.26: the car only slides sideways when you're faster than the assist would take you (your own
+          // throttle, boost or a tow), so assisted corners hold their line; the speed scrub above still applies.
+          const ew = c.v / (lim * Math.max(1.03, g.ai.assist + 0.01)) - 1;
+          if (ew > 0) {
+            c.d += out * Math.min(30, ew * 120) * dt;
+            c.d = clamp(c.d, -this.grassAt(c.p, -1), this.grassAt(c.p, 1));
+            // Wherever the slide leaves you is where you stay: no pull back to your old line.
+            if (this.controls !== 'tilt') c.dTarget = c.d;
+          }
           c.wear = Math.max(0, c.wear - e * 0.04 * dt);
-          if (e > 0.05 && g.wideCd <= 0) { g.wideCd = 2; this.toast('RUNNING WIDE', '#FF8A00'); buzz(25); }
+          if (ew > 0.02 && g.wideCd <= 0) { g.wideCd = 2; this.toast('RUNNING WIDE', '#FF8A00'); buzz(25); }
         }
       }
       if (c.isPlayer && g.wideCd > 0) g.wideCd -= dt;
