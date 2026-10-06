@@ -90,30 +90,31 @@ export const DEFAULT_SETTINGS: Settings = { cameraTilt: 52, weather: 'Random', a
  * the back · skill: chance of taking the racing line through the next apex (also pit calls) ·
  * grip: cornering grip vs yours · accel: pull out of corners (1 ≈ your car) · launch: reaction
  * window at lights out (s) · tow / drs: AI uses slipstream / DRS like you do · boost: what the AI earns
- * per apex it hits and spends like you do (0 = no boost) · defend: chance per check that an AI
- * with a human closing behind moves across to cover their line.
+ * per apex it hits and spends like you do (0 = no boost).
  * Traffic (v1.19) · start: your grid slot in solo races (0 = pole) · slip: slipstream pull for everyone ·
  * sling: extra speed and seconds when you pull out of a tow to pass · bump: your speed vs the car you run
- * into from behind, and the lift while you recover · yield: chance a slower AI moves aside when you close in.
+ * into from behind on boost, and the lift while you recover.
  * Boost (v1.28) · earn: what you earn per apex you hit (the AI earns `boost`, 0 = it never boosts). A burst costs 35.
- * Narrow sections (v1.21) · follow: in single file and side-by-side merges your car keeps its distance by itself.
+ * Traffic manners (v1.29, every level): you keep your distance to the car ahead by yourself and only run into it on
+ * boost; the AI never runs into anyone, boosts only with a clear line ahead, only changes into a line that's clear
+ * ahead, alongside and behind, and steps aside for any faster car.
  */
 export type AiProfile = {
   pace: number; spread: number; skill: number; grip: number; accel: number;
-  launch: [number, number]; tow: boolean; drs: boolean; boost: number; defend: number; blurb: string;
-  start: number; slip: number; sling: [number, number]; bump: [number, number]; yield: number;
-  earn: number; follow: boolean;
+  launch: [number, number]; tow: boolean; drs: boolean; boost: number; blurb: string;
+  start: number; slip: number; sling: [number, number]; bump: [number, number];
+  earn: number;
 };
 export const AI_LEVELS: AiPace[] = ['Easy', 'Normal', 'Hard', 'Expert'];
 export const AI: Record<AiPace, AiProfile> = {
-  Easy:   { pace: 0.88,  spread: 0.11,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 10, defend: 0,    blurb: 'A gentle Sunday drive',
-            start: 5,  slip: 1.09,  sling: [1.1, 1.3],  bump: [0.9, 0.9],   yield: 0.85, earn: 40, follow: true },
-  Normal: { pace: 0.955, spread: 0.08,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 18, defend: 0,    blurb: 'A fair fight',
-            start: 10, slip: 1.08,  sling: [1.08, 1.1], bump: [0.86, 0.85], yield: 0.35, earn: 32, follow: true },
-  Hard:   { pace: 1.025, spread: 0.03,  skill: 0.88, grip: 1.005, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, defend: 0.3,  blurb: 'They know a few tricks',
-            start: 7,  slip: 1.065, sling: [1.05, 0.8], bump: [0.8, 0.78],  yield: 0.15, earn: 26, follow: false },
-  Expert: { pace: 1.045, spread: 0.02,  skill: 0.97, grip: 1.025, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, defend: 0.5,  blurb: 'They race like you. Bring your best',
-            start: 9,  slip: 1.06,  sling: [1.04, 0.6], bump: [0.75, 0.72], yield: 0.03, earn: 22, follow: false },
+  Easy:   { pace: 0.88,  spread: 0.11,  skill: 0.25, grip: 0.92, accel: 0.88, launch: [0.35, 0.75], tow: false, drs: false, boost: 10, blurb: 'A gentle Sunday drive',
+            start: 5,  slip: 1.09,  sling: [1.1, 1.3],  bump: [0.9, 0.9],   earn: 40 },
+  Normal: { pace: 0.955, spread: 0.08,  skill: 0.55, grip: 0.97, accel: 0.92, launch: [0.15, 0.45], tow: true,  drs: false, boost: 18, blurb: 'A fair fight',
+            start: 10, slip: 1.08,  sling: [1.08, 1.1], bump: [0.86, 0.85], earn: 32 },
+  Hard:   { pace: 1.025, spread: 0.03,  skill: 0.88, grip: 1.005, accel: 0.99, launch: [0.08, 0.2], tow: true,  drs: true,  boost: 24, blurb: 'They know a few tricks',
+            start: 10, slip: 1.065, sling: [1.05, 0.8], bump: [0.8, 0.78],  earn: 26 },
+  Expert: { pace: 1.045, spread: 0.02,  skill: 0.97, grip: 1.025, accel: 1.02, launch: [0.05, 0.13], tow: true,  drs: true,  boost: 30, blurb: 'They race like you. Bring your best',
+            start: 9,  slip: 1.06,  sling: [1.04, 0.6], bump: [0.75, 0.72], earn: 22 },
 };
 export const aiProfile = (p: string | undefined) => AI[p as AiPace] || AI.Normal;
 
