@@ -105,7 +105,7 @@ export function TyrePicker({ value, set, disabled }: { value: Compound; set: (c:
 // ---------------- Next tyres (during the race) ----------------
 /**
  * Slim strip on the right edge: the tyres the crew will fit at your next stop. Defaults to the
- * compound you're on; tap another to change it. Marked data-noswipe so taps never steer or brake.
+ * compound you're on; tap another to change it. Marked data-noswipe so taps never steer.
  */
 export function NextTyreStrip({ current, next, set, rain }: { current: number; next: number; set: (i: number) => void; rain: boolean }) {
   return (
