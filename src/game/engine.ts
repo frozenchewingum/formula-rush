@@ -98,8 +98,8 @@ export interface NetLink {
   sendFinish(m: FinishMsg): void;
 }
 
-/** Off track (v1.24): grass top speed vs the car's base, how fast it drifts back to the road (units/s), and how far out it can go. */
-const GRASS_SPEED = 0.5, GRASS_RETURN = 4.5, GRASS_MAX = 6;
+/** Off track (v1.24): grass top speed vs the car's base, and how far past the road edge a car can go. */
+const GRASS_SPEED = 0.5, GRASS_MAX = 6;
 /** Slipstream pull 0–1 by gap to the car ahead: nothing right on its gearbox, full from 12 to 22 units back, gone by 30. */
 const towPull = (gap: number) => gap < 5 ? 0 : gap < 12 ? (gap - 5) / 7 : gap < 22 ? 1 : gap < 30 ? (30 - gap) / 8 : 0;
 
@@ -367,8 +367,11 @@ export class Engine {
     if (pl.finished || pl.pit || this.paused) return;
     const cs = this.centres(pl.p, 20), cur = this.nearestIdx(cs, pl.dTarget);
     // Swiping right from the right-hand line inside the pit window takes the pit lane.
-    if (dir > 0 && cs.length === 3 && cur === 2 && this.canPit(pl)) return this.enterPit(pl);
-    pl.dTarget = cs[clamp(cur + dir, 0, cs.length - 1)];
+    if (dir > 0 && cs.length === 3 && cur === 2 && Math.abs(cs[cur] - pl.dTarget) < 0.3 && this.canPit(pl)) return this.enterPit(pl);
+    // Next line over in the swipe direction (from wherever you are, on a line, between two or on the grass);
+    // past the outside line you can step off onto the grass (v1.25: no walls, nothing holds you on).
+    const next = cs.filter(x => dir > 0 ? x > pl.dTarget + 0.3 : x < pl.dTarget - 0.3).sort((a, b) => Math.abs(a - pl.dTarget) - Math.abs(b - pl.dTarget))[0];
+    pl.dTarget = next ?? clamp(pl.dTarget + dir * LANE, -this.grassAt(pl.p, -1) + 1, this.grassAt(pl.p, 1) - 1);
   }
 
   action() {
@@ -408,6 +411,12 @@ export class Engine {
   }
   /** Road half width at `p` (tapers into narrow sections). */
   halfAt(p: number) { return this.T.hw[this.idx(p)]; }
+  /** Furthest a car can go off the road on side `side` (±1) at `p`: grass, but not into the pit lane alongside the straight. */
+  private grassAt(p: number, side: number) {
+    const L = this.T.L; let s = ((p % L) + L) % L; if (s > L / 2) s -= L;
+    const pitSide = side > 0 && s > PIT.ENTRY - 14 && s < PIT.EXIT + 16;
+    return pitSide ? Math.min(this.halfAt(p) + GRASS_MAX, PIT.IN_EDGE - 1.3) : this.halfAt(p) + GRASS_MAX;
+  }
   /** AI `c` moves to a free line away from `from` (and stops defending for a moment). */
   private giveWay(c: Car, from: Car) {
     const cs = this.centres(c.p), cur = this.nearestIdx(cs, c.dTarget), them = this.nearestIdx(cs, from.dTarget);
@@ -595,7 +604,7 @@ export class Engine {
       const steer = this.keySteer || this.dragSteer || this.gyroSteer || 0;
       // Steering hard right at the right-hand edge inside the pit window takes the pit lane.
       if (steer > 0.55 && pl.d > LANE + 0.6 && this.canPit(pl)) this.enterPit(pl);
-      else { const w = Math.min(this.halfAt(pl.p), this.halfAt(pl.p + 12)) - 1.6; pl.dTarget = clamp(pl.d + steer * 7, -w, w); }
+      else pl.dTarget = clamp(pl.d + steer * 7, -this.grassAt(pl.p, -1), this.grassAt(pl.p, 1));
     }
     for (const c of g.cars) {
       if (c.remote) { this.stepRemote(c, dt); continue; }
@@ -648,8 +657,17 @@ export class Engine {
       if (!c.isPlayer && !c.finished && started) this.aiPitCheck(c, rain);
       if (c.pit) target = this.pitSpeed(c, target, dt);
       if (c.pit === 2) { if (c.isPlayer) this.stepPitUi(); continue; }
-      // Narrowing ahead (v1.21): every car is funnelled onto a line that still exists, a free one if there is.
-      if (!c.pit && started && !c.finished && !(c.isPlayer && this.controls === 'tilt')) {
+      // Narrowing ahead (v1.25): your line only moves when the road actually closes in on it, onto the nearest
+      // line that's left (never because of traffic, so sitting in a tow doesn't push you aside). Off the road,
+      // you stay where you are until you steer back.
+      if (c.isPlayer && !c.pit && started && !c.finished && this.controls !== 'tilt') {
+        const room = Math.min(this.halfAt(c.p), this.halfAt(c.p + 20)) - 1.6;
+        if (Math.abs(c.dTarget) > room && Math.abs(c.dTarget) <= this.halfAt(c.p) - 0.9) {
+          const cs = this.centres(c.p, 20); c.dTarget = cs[this.nearestIdx(cs, c.d)];
+        }
+      }
+      // AI: funnelled onto a line that still exists, a free one if there is.
+      if (!c.isPlayer && !c.pit && started && !c.finished) {
         const cs = this.centres(c.p);
         if (Math.abs(cs[this.nearestIdx(cs, c.dTarget)] - c.dTarget) > 0.2) {
           const order = cs.map((_, j) => j).sort((a, b) => Math.abs(cs[a] - c.d) - Math.abs(cs[b] - c.d));
@@ -708,15 +726,14 @@ export class Engine {
           if (fast && Math.random() < g.ai.yield) this.giveWay(c, fast);
         }
       }
-      // Off track (v1.24): no walls. Past the road edge you're on the grass: the car bleeds speed down to a
-      // crawl, chews its tyres a little, and drifts back onto the nearest line by itself, slowly.
+      // Off track (v1.24): no walls. Past the road edge you're on the grass: the car bleeds speed down and chews
+      // its tyres a little. It stays out there until you steer back (v1.25: no drifting back by itself).
       const edge = this.halfAt(c.p) - 0.9;
       const off = c.isPlayer && !c.pit && started && Math.abs(c.d) > edge;
       if (off) {
         target = Math.min(target, c.base * GRASS_SPEED);
         decel = Math.min(decel, 40);
         c.wear = Math.max(0, c.wear - 0.012 * dt);
-        if (Math.abs(c.dTarget) > edge - 0.6) { const cs = this.centres(c.p, 12); c.dTarget = cs[this.nearestIdx(cs, c.d)]; }
         g.shake = Math.max(g.shake, 0.06);
         if (g.wideCd <= 0) { g.wideCd = 2; this.toast('OFF TRACK', '#FF8A00'); buzz(25); }
       }
@@ -724,8 +741,7 @@ export class Engine {
       const prevD = c.d;
       const wets = spec(c.tc).id === 'wet';
       const lr = c.isPlayer ? 21 * tp.steer * (rain && !wets ? 0.7 : 1) : 9;
-      const rate = off ? Math.min(lr, GRASS_RETURN) : lr;
-      c.d += clamp(c.dTarget - c.d, -rate * dt, rate * dt);
+      c.d += clamp(c.dTarget - c.d, -lr * dt, lr * dt);
       if (c.isPlayer && rain && !c.pit) c.d += Math.sin(g.t * 1.7) * (wets ? 0.35 : 0.9) * dt;
       // Too fast for the corner (Normal and up): slide wide, scrub speed and tyre; far too fast runs off onto the grass.
       if (c.isPlayer && !c.pit && g.ai.assist !== 1 && started && !c.finished) {
@@ -734,9 +750,10 @@ export class Engine {
         if (Math.abs(kk) > 0.006 && c.v > vs) {
           const e = c.v / vs - 1, out = -Math.sign(kk);
           c.v -= c.v * Math.min(0.6, e * 2.2) * dt;
-          if (e > 0.08 && this.controls !== 'tilt') { const cs = this.centres(c.p, 12); c.dTarget = out * cs[cs.length - 1]; }
           c.d += out * Math.min(30, e * 120) * dt;
-          if (c.isPlayer) c.d = clamp(c.d, -this.halfAt(c.p) - GRASS_MAX, this.halfAt(c.p) + GRASS_MAX);
+          c.d = clamp(c.d, -this.grassAt(c.p, -1), this.grassAt(c.p, 1));
+          // Wherever the slide leaves you is where you stay: no pull back to your old line.
+          if (this.controls !== 'tilt') c.dTarget = c.d;
           c.wear = Math.max(0, c.wear - e * 0.04 * dt);
           if (e > 0.05 && g.wideCd <= 0) { g.wideCd = 2; this.toast('RUNNING WIDE', '#FF8A00'); buzz(25); }
         }
