@@ -41,7 +41,7 @@ function HazardArt() {
   );
   return (
     <div aria-hidden style={{ width: '100%', aspectRatio: '300 / 538', borderRadius: 12, background: '#141417', display: 'flex', flexDirection: 'column', gap: 8, padding: 10, boxSizing: 'border-box', justifyContent: 'center' }}>
-      {row('#E10600', 'CONTACT', 'cars & grass slow you')}
+      {row('#E10600', 'CONTACT', 'cars & walls slow you')}
       {row('#22C55E', 'TYRES', 'they won’t last forever')}
       {row('#3B6CFF', 'RAIN', 'everything gets harder')}
     </div>
@@ -93,13 +93,8 @@ const STEPS: Step[] = [
     keys: '↑ or Space',
   },
   {
-    title: 'Hold the corners', art: <HazardArt />,
-    body: <>No brakes needed: the car lifts for corners by itself. But every corner <Y c="#FF8A00">pushes you outward</Y>, harder the faster you take it and the higher the AI. <Y c="#F2F2F2">Swipe toward the inside</Y> to hold your line, or you’ll slide across the lines and onto the <Y c="#22C55E">grass</Y>. Boost or a tow into a bend? Expect a bigger push.</>,
-    keys: 'Hold ↓ or S',
-  },
-  {
     title: 'Keep it clean', art: <HazardArt />,
-    body: <>Hitting cars or running onto the grass costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
+    body: <>Hitting cars or the wall costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
   },
   {
     title: 'Tyres & Pit Stop Rush', art: <PitArt />,
