@@ -94,7 +94,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Keep it clean', art: <HazardArt />,
-    body: <>Hitting cars or the wall costs you. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder. Rivals won’t always make room for you, either.</>,
+    body: <>Your car keeps its distance by itself; only <Y c="#FFD400">boost</Y> can put you into the back of someone, and the wall costs you too. Faster than the car ahead? It steps aside when there’s room. Tyres don’t last forever, and when it <Y c="#3B6CFF">rains</Y>, everything gets harder.</>,
   },
   {
     title: 'Tyres & Pit Stop Rush', art: <PitArt />,

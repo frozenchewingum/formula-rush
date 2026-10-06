@@ -28,9 +28,9 @@ export type Car = {
   /** Pit state: 0 racing · 1 pit lane to box · 2 stopped · 3 pit lane to exit · 4 merging back. */
   pit: number; lineP: number; boxP: number; outP: number; pitHold: number; pitT0: number; pitChecked: number;
   stops: number; bestPit: number; stints: number[]; boxCalled: boolean; failCalled: boolean;
-  /** AI boost (every level since v1.28): meter 0–100 earned at apexes, seconds of boost left, next defend check. */
-  ab: number; abT: number; defT: number;
-  /** Next check for giving way to a faster human behind (v1.19). */
+  /** AI boost (every level since v1.28): meter 0–100 earned at apexes, and seconds of boost left. */
+  ab: number; abT: number;
+  /** Next check for giving way to a faster car behind (v1.29). */
   yT: number;
 };
 type Snap = { t: number; p: number; d: number; v: number; y: number };
@@ -230,7 +230,7 @@ export class Engine {
         tc: me ? myTyre : human ? 1 : aiStartTyre(laps, wetStart), wear: 1,
         pit: 0, lineP: 0, boxP: 0, outP: 0, pitHold: 0, pitT0: 0, pitChecked: -1,
         stops: 0, bestPit: 0, stints: [], boxCalled: false, failCalled: false,
-        ab: 20, abT: 0, defT: Math.random(), yT: Math.random() * 0.5,
+        ab: 20, abT: 0, yT: Math.random() * 0.5,
       };
     });
     for (const c of cars) c.stints.push(c.tc);
@@ -404,20 +404,32 @@ export class Engine {
   }
   /** Road half width at `p` (tapers into narrow sections). */
   halfAt(p: number) { return this.T.hw[this.idx(p)]; }
-  /** AI `c` moves to a free line away from `from` (and stops defending for a moment). */
+  /** AI `c` moves to a free line away from `from`. */
   private giveWay(c: Car, from: Car) {
     const cs = this.centres(c.p), cur = this.nearestIdx(cs, c.dTarget), them = this.nearestIdx(cs, from.dTarget);
     const all = cs.map((_, k) => k), opts = all.filter(k => k !== cur && k !== them).concat(all.filter(k => k !== cur && k === them));
     for (const k of opts) {
-      if (this.laneFree(c, cs[k]) && !this.makesWall(c, cs[k])) { c.dTarget = cs[k]; c.defT = 2.5; return; }
+      if (this.laneFree(c, cs[k]) && !this.makesWall(c, cs[k])) { c.dTarget = cs[k]; return; }
     }
   }
+  /** No car on (or heading for) line `d` alongside `c`, nor one coming up behind on it fast enough to arrive mid-move (v1.29). */
   private laneFree(c: Car, d: number) {
     for (const o of this.g.cars) {
-      if (o === c) continue;
-      if (Math.abs(o.p - c.p) < 10 && (Math.abs(o.d - d) < 2.4 || Math.abs(o.dTarget - d) < 2.4)) return false;
+      if (o === c || o.pit) continue;
+      const gap = o.p - c.p, back = 10 + Math.max(0, o.v - c.v) * 1.2, fwd = 10 + Math.max(0, c.v - o.v) * 1.2;
+      if (gap < fwd && gap > -back && (Math.abs(o.d - d) < 2.4 || Math.abs(o.dTarget - d) < 2.4)) return false;
     }
     return true;
+  }
+  /** Nearest car ahead of `c` that's on its line or moving onto it (v1.29), within `range`. */
+  private blocker(c: Car, range: number) {
+    let best: Car | null = null, bg = range;
+    for (const o of this.g.cars) {
+      if (o === c || o.pit) continue;
+      const gap = o.p - c.p;
+      if (gap > 0 && gap < bg && (Math.abs(o.d - c.d) < 2.3 || (gap < 12 && Math.abs(o.dTarget - c.d) < 2.3))) { bg = gap; best = o; }
+    }
+    return best ? { car: best, gap: bg } : null;
   }
   /** True if putting `c` on lane `d` would fill every lane side by side (a wall nobody can pass). */
   private makesWall(c: Car, d: number) {
@@ -605,7 +617,8 @@ export class Engine {
         c.drsOn = !!far && far.gap / Math.max(c.v, 1) < 1;
         if (c.drsOn) mult *= 1.12;
         // Hard / Expert AI spend boost the way you do: a 1.6 s burst for 35 of the meter.
-        if (live && g.ai.boost && c.abT <= 0 && c.ab >= 35 && !c.drsOn) { c.ab -= 35; c.abT = 1.6; }
+        // v1.29: only with a clear line ahead, so a boosting AI never ends up in the back of someone.
+        if (live && g.ai.boost && c.abT <= 0 && c.ab >= 35 && !c.drsOn && !this.blocker(c, 45)) { c.ab -= 35; c.abT = 1.6; }
         c.boostOn = live && c.abT > 0;
         if (c.boostOn) mult *= 1.25;
         if (c.abT > 0) c.abT -= dt;
@@ -638,21 +651,21 @@ export class Engine {
           c.dTarget = cs[free ?? order[0]];
         }
       }
-      // Easy / Normal: in single file your car keeps its distance to the car ahead by itself.
-      // In narrow sections it also watches where cars are heading, so a car merging in just ahead is let in.
-      if (c.isPlayer && g.ai.follow && !c.pit && started && !c.finished && this.lanesAhead(c.p, 20) < 3) {
+      // No rear-ending (v1.29): your car keeps its distance to the car ahead on your line by itself, on every level,
+      // and lets a car merging in just ahead have the line. Only boost lets you run into the back of someone.
+      if (c.isPlayer && !c.pit && started && !c.finished && g.boostT <= 0) {
         const one = this.lanesAhead(c.p, 20) === 1;
         const ah = g.cars.filter(o => o !== c && !o.pit && o.p > c.p && o.p - c.p < 14 && (one || Math.abs(o.dTarget - c.dTarget) < 2.0 || Math.abs(o.d - c.d) < 2.0))
           .sort((a, b) => a.p - b.p)[0];
         if (ah) target = Math.min(target, ah.v * (ah.p - c.p < 6 ? 0.95 : 1));
       }
-      // Merging side by side: the car behind backs off and lets the one ahead have the line (you too on Easy / Normal).
-      if ((!c.isPlayer || g.ai.follow) && !c.pit && started && !c.finished) {
+      // Merging side by side: the car behind backs off and lets the one ahead have the line (you too, unless boosting).
+      if ((!c.isPlayer || g.boostT <= 0) && !c.pit && started && !c.finished) {
         const alongside = g.cars.find(o => o !== c && !o.pit && o.p > c.p && o.p - c.p < 7 && Math.abs(o.dTarget - c.dTarget) < 2.4 && Math.abs(o.d - c.d) > 1.2);
         if (alongside) target = Math.min(target, alongside.v * 0.9);
       }
       if (!c.isPlayer && !c.pit) {
-        const ah = this.carAhead(c, 16, 2.3);
+        const ah = this.blocker(c, 16);
         if (ah) {
           let moved = false;
           if (ah.car.v < c.v + 2) {
@@ -662,7 +675,8 @@ export class Engine {
               if (nl >= 0 && nl < cs.length && this.laneFree(c, cs[nl]) && !this.makesWall(c, cs[nl])) { c.dTarget = cs[nl]; moved = true; break; }
             }
           }
-          if (!moved || ah.gap < 6) target = Math.min(target, ah.car.v * (ah.gap < 6 ? 0.95 : 1));
+          // The AI never runs into the car ahead (v1.29): it holds that car's speed until it's clear of it, even mid-move.
+          if (!moved || ah.gap < 10) target = Math.min(target, ah.car.v * (ah.gap < 6 ? 0.95 : 1));
         }
         // Already part of a three-wide wall and not its leader: lift slightly so the wall breaks up.
         if (this.makesWall(c, c.dTarget) && g.cars.some(o => o !== c && o.p > c.p && o.p - c.p < 14)) target *= 0.94;
@@ -675,18 +689,21 @@ export class Engine {
           const want = cs[this.nearestIdx(cs, raw)];
           if (this.laneFree(c, want) && !this.makesWall(c, want)) c.dTarget = want;
         }
-        // Defending: a human closing in behind on another line → move across to cover it, now and then.
-        if (g.ai.defend && started && !c.finished && (c.defT -= dt) <= 0) {
-          c.defT = 0.9 + Math.random() * 0.6;
-          const chaser = g.cars.find(o => !o.ai && !o.pit && !o.finished && c.p - o.p > 8 && c.p - o.p < 30 && Math.abs(o.d - c.dTarget) > 2.3);
-          const cs = this.centres(c.p), cover = chaser ? cs[this.nearestIdx(cs, chaser.dTarget)] : 0;
-          if (chaser && Math.random() < g.ai.defend && this.laneFree(c, cover) && !this.makesWall(c, cover)) c.dTarget = cover;
+        // Giving way (v1.29): any faster car (you or another AI) closing in behind on the same line → step aside
+        // into a free line, on every level. No line free: hold the line rather than swerve into someone.
+        if (started && !c.finished && (c.yT -= dt) <= 0) {
+          c.yT = 0.4;
+          const fast = g.cars.find(o => o !== c && !o.pit && !o.finished && c.p - o.p > 4 && c.p - o.p < 28 && Math.abs(o.d - c.d) < 2.3 && o.v > c.v + 2);
+          if (fast) this.giveWay(c, fast);
         }
-        // Giving way: a clearly faster human closing in on the same line → step aside, more readily on easier levels.
-        if (g.ai.yield && started && !c.finished && (c.yT -= dt) <= 0) {
-          c.yT = 0.5;
-          const fast = g.cars.find(o => !o.ai && !o.pit && !o.finished && c.p - o.p > 5 && c.p - o.p < 28 && Math.abs(o.d - c.d) < 2.3 && o.v > c.v + 2);
-          if (fast && Math.random() < g.ai.yield) this.giveWay(c, fast);
+      }
+      // Mid-move check (v1.29): an AI moving across with a car now alongside on that side goes back to its own line.
+      if (!c.isPlayer && !c.pit && started && !c.finished && Math.abs(c.dTarget - c.d) > 0.3) {
+        const dir = Math.sign(c.dTarget - c.d);
+        const side = g.cars.some(o => o !== c && !o.pit && Math.abs(o.p - c.p) < 6.5 && (o.d - c.d) * dir > 0.4 && Math.abs(o.d - c.d) < 2.9);
+        if (side) {
+          const cs = this.centres(c.p, 12), to = this.nearestIdx(cs, c.dTarget), back = clamp(to - dir, 0, cs.length - 1);
+          if (back !== to) c.dTarget = cs[back];
         }
       }
       c.v += clamp(target - c.v, -decel * dt, accelRate(this.accelModel, c.isPlayer, c.v, target) * (c.isPlayer ? 1 : g.ai.accel / (24 / 26)) * dt);
@@ -888,9 +905,13 @@ export class Engine {
       // From behind it only counts when you're closing in (or right on top of them), not when they pull away.
       if (Math.abs(dp) < 4.8 && dd < 2.05 && !(dp > 3.2 && o.v > pl.v)) {
         if (dp > 1.5) {
+          // You ran into them (only possible on boost): you lose speed, they step aside if they can.
           pl.v = Math.min(pl.v, o.v * g.ai.bump[0]);
-          // Easier AI shuffle aside after a tap from behind.
-          if (o.ai && !o.remote && Math.random() < g.ai.yield) this.giveWay(o, pl);
+          if (o.ai && !o.remote) this.giveWay(o, pl);
+        } else if (dp < -1.5) {
+          // Something ran into you from behind (rare: the AI keeps its distance): it loses speed, you keep your line.
+          if (!o.remote) o.v = Math.min(o.v, pl.v * 0.9);
+          pl.v *= 0.97;
         }
         else {
           pl.v *= 0.88;
